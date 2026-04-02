@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runPipeline } from "./engine/pipeline.js";
+import { runChecksInWorkspace } from "./engine/verification.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SCENARIO_FILES = {
@@ -9,7 +10,7 @@ const SCENARIO_FILES = {
     "infected-healed": "infected-healed.json",
     "protected-zone-blocked": "protected-zone-blocked.json"
 };
-export async function runScenario(name) {
+export async function runScenario(name, options = {}) {
     const fileName = SCENARIO_FILES[name];
     let raw;
     for (const scenarioPath of [
@@ -30,8 +31,20 @@ export async function runScenario(name) {
         throw new Error(`Scenario fixture not found for ${name}`);
     }
     const parsed = JSON.parse(raw);
+    const livePath = options.liveWorkspacePath ?? process.env.MAINLINE_LIVE_WORKSPACE;
+    if (livePath) {
+        const live = await runChecksInWorkspace(livePath);
+        const merged = {
+            ...parsed,
+            initialChecks: live.checks
+        };
+        const pipelineOptions = {
+            verificationFailures: live.failures
+        };
+        return runPipeline(merged, pipelineOptions);
+    }
     return runPipeline(parsed);
 }
-export async function runScenarioDefinition(scenario) {
-    return runPipeline(scenario);
+export async function runScenarioDefinition(scenario, pipelineOptions) {
+    return runPipeline(scenario, pipelineOptions);
 }

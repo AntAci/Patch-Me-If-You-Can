@@ -5,7 +5,13 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "run:scenario": "node dist/cli/run-scenario.js"
+    "test": "npm run build && node --test dist/smoke.test.js",
+    "lint": "node -e \"process.exit(0)\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "run:scenario": "node dist/cli/run-scenario.js",
+    "run:pipeline": "node dist/cli/run-pipeline.js",
+    "run:server": "node dist/cli/run-server.js",
+    "start": "node dist/cli/run-server.js"
   },
   "devDependencies": {
     "@types/node": "^24.6.0",

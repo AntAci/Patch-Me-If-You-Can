@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { runPipeline } from "./engine/pipeline.js";
+import { runPipeline, type PipelineOptions } from "./engine/pipeline.js";
+import { runChecksInWorkspace } from "./engine/verification.js";
 import type { ScenarioDefinition, ScenarioName } from "./schemas/scenario.js";
 import type { ScenarioRunResult } from "./schemas/events.js";
 
@@ -14,7 +15,15 @@ const SCENARIO_FILES: Record<ScenarioName, string> = {
   "protected-zone-blocked": "protected-zone-blocked.json"
 };
 
-export async function runScenario(name: ScenarioName): Promise<ScenarioRunResult> {
+export interface RunScenarioOptions {
+  /** When set, runs real npm test / lint / tsc in this directory and feeds results into the pipeline. */
+  liveWorkspacePath?: string;
+}
+
+export async function runScenario(
+  name: ScenarioName,
+  options: RunScenarioOptions = {}
+): Promise<ScenarioRunResult> {
   const fileName = SCENARIO_FILES[name];
   let raw: string | undefined;
 
@@ -37,11 +46,26 @@ export async function runScenario(name: ScenarioName): Promise<ScenarioRunResult
   }
 
   const parsed = JSON.parse(raw) as ScenarioDefinition;
+  const livePath = options.liveWorkspacePath ?? process.env.MAINLINE_LIVE_WORKSPACE;
+
+  if (livePath) {
+    const live = await runChecksInWorkspace(livePath);
+    const merged: ScenarioDefinition = {
+      ...parsed,
+      initialChecks: live.checks
+    };
+    const pipelineOptions: PipelineOptions = {
+      verificationFailures: live.failures
+    };
+    return runPipeline(merged, pipelineOptions);
+  }
+
   return runPipeline(parsed);
 }
 
 export async function runScenarioDefinition(
-  scenario: ScenarioDefinition
+  scenario: ScenarioDefinition,
+  pipelineOptions?: PipelineOptions
 ): Promise<ScenarioRunResult> {
-  return runPipeline(scenario);
+  return runPipeline(scenario, pipelineOptions);
 }

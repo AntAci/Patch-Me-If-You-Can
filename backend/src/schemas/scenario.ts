@@ -3,6 +3,10 @@ import type { CheckResult } from "./events.js";
 export interface ScenarioDefinition {
   scenarioId: string;
   patchId: string;
+  /** Human-facing task description (e.g. for LLM / agent). */
+  task: string;
+  /** Repo zone label for UI (Auth, UI, API, Config, Tests). */
+  zone: string;
   patch: {
     filesChanged: string[];
     diffSummary: string;

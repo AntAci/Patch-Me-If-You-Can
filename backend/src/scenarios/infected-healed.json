@@ -1,0 +1,20 @@
+{
+  "scenarioId": "infected-healed",
+  "patchId": "patch-002",
+  "patch": {
+    "filesChanged": ["src/features/billing.ts"],
+    "diffSummary": "AI patch introduced regression in billing retry path."
+  },
+  "protectedFiles": ["src/security/", "src/auth/", "config/secrets.ts"],
+  "initialChecks": {
+    "tests": { "status": "failed", "summary": "3 billing tests failed" },
+    "lint": { "status": "passed", "summary": "No lint errors" },
+    "typecheck": { "status": "passed", "summary": "TypeScript clean" }
+  },
+  "retryChecks": {
+    "tests": { "status": "passed", "summary": "42/42 tests passed after repair" },
+    "lint": { "status": "passed", "summary": "No lint errors" },
+    "typecheck": { "status": "passed", "summary": "TypeScript clean" }
+  },
+  "diagnosisHints": ["regression", "unsafe retry logic"]
+}

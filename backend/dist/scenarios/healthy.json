@@ -1,0 +1,15 @@
+{
+    "scenarioId": "healthy",
+    "patchId": "patch-001",
+    "patch": {
+        "filesChanged": ["src/features/search.ts"],
+        "diffSummary": "Refactor search scoring without changing auth or security modules."
+    },
+    "protectedFiles": ["src/security/", "src/auth/", "config/secrets.ts"],
+    "initialChecks": {
+        "tests": { "status": "passed", "summary": "42/42 tests passed" },
+        "lint": { "status": "passed", "summary": "No lint errors" },
+        "typecheck": { "status": "passed", "summary": "TypeScript clean" }
+    },
+    "diagnosisHints": ["refactor", "low-risk"]
+}

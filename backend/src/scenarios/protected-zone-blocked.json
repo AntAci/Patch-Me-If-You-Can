@@ -1,0 +1,15 @@
+{
+  "scenarioId": "protected-zone-blocked",
+  "patchId": "patch-003",
+  "patch": {
+    "filesChanged": ["src/auth/session.ts", "src/features/profile.ts"],
+    "diffSummary": "Patch modifies session validation and profile rendering."
+  },
+  "protectedFiles": ["src/security/", "src/auth/", "config/secrets.ts"],
+  "initialChecks": {
+    "tests": { "status": "skipped", "summary": "Skipped due to policy block" },
+    "lint": { "status": "skipped", "summary": "Skipped due to policy block" },
+    "typecheck": { "status": "skipped", "summary": "Skipped due to policy block" }
+  },
+  "diagnosisHints": ["protected zone touched"]
+}

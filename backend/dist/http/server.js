@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { WebSocket, WebSocketServer } from "ws";
 import { loadMainlineEnv } from "../config/env.js";
 import { runScenario } from "../runner.js";
 import { toFrontendContract } from "../contract/frontend.js";
@@ -26,6 +27,29 @@ function readBody(req) {
         req.on("error", reject);
     });
 }
+function scheduleTimelineBroadcast(send, result, mutationId) {
+    const now = Date.now();
+    const events = result.timeline.filter((event, idx) => !(idx === 0 && event.name === "scenario_received"));
+    events.forEach((event, idx) => {
+        const delay = 250 + idx * 320;
+        setTimeout(() => {
+            send({
+                type: "timeline_event",
+                event: {
+                    ...event,
+                    at: new Date(now + delay).toISOString(),
+                    data: {
+                        ...(event.data ?? {}),
+                        mutationId,
+                        zone: result.zone,
+                        diagnosisCode: result.diagnosis.code,
+                        health: result.health
+                    }
+                }
+            });
+        }, delay);
+    });
+}
 async function runNamedScenario(name, liveWorkspacePath, format = "full") {
     const result = await runScenario(name, liveWorkspacePath ? { liveWorkspacePath } : {});
     return format === "contract" ? toFrontendContract(result) : result;
@@ -33,7 +57,7 @@ async function runNamedScenario(name, liveWorkspacePath, format = "full") {
 export function createMainlineServer(options = {}) {
     const env = loadMainlineEnv();
     const live = options.liveWorkspacePath ?? env.liveWorkspace;
-    return createServer(async (req, res) => {
+    const server = createServer(async (req, res) => {
         const url = new URL(req.url ?? "/", "http://127.0.0.1");
         if (req.method === "OPTIONS") {
             res.writeHead(204, {
@@ -124,6 +148,12 @@ export function createMainlineServer(options = {}) {
             };
             recordHookEvent(hookEvent);
             const normalized = normalizeHookMutation(hookEvent);
+            if (!normalized || !env.enableLiveMutations) {
+                sendRealtime({
+                    type: "hook_event",
+                    hook: hookEvent
+                });
+            }
             if (!env.enableLiveMutations || !normalized) {
                 attachHookEventToMostRecentMutation(hookEvent);
                 json(res, 200, {
@@ -143,10 +173,42 @@ export function createMainlineServer(options = {}) {
             }));
             mutation.status = "processing";
             upsertMutation(mutation);
+            sendRealtime({
+                type: "timeline_event",
+                event: {
+                    name: "scenario_received",
+                    at: new Date().toISOString(),
+                    attempt: 0,
+                    data: {
+                        scenarioId: mutation.mutationId,
+                        patchId: mutation.mutationId.toUpperCase(),
+                        mutationId: mutation.mutationId,
+                        zone: mutation.zone,
+                        filesChanged: mutation.filesChanged.join(", ")
+                    }
+                }
+            });
+            sendRealtime({
+                type: "mutation_status",
+                mutationId: mutation.mutationId,
+                status: "processing",
+                zone: mutation.zone,
+                task: mutation.task,
+                at: new Date().toISOString()
+            });
             try {
                 mutation.result = await processMutation(mutation);
                 mutation.status = "completed";
                 upsertMutation(mutation);
+                sendRealtime({
+                    type: "mutation_status",
+                    mutationId: mutation.mutationId,
+                    status: "completed",
+                    zone: mutation.zone,
+                    task: mutation.task,
+                    at: new Date().toISOString()
+                });
+                scheduleTimelineBroadcast(sendRealtime, mutation.result, mutation.mutationId);
                 json(res, 200, {
                     ok: true,
                     received: true,
@@ -160,6 +222,15 @@ export function createMainlineServer(options = {}) {
                 mutation.status = "failed";
                 mutation.error = String(error);
                 upsertMutation(mutation);
+                sendRealtime({
+                    type: "mutation_status",
+                    mutationId: mutation.mutationId,
+                    status: "failed",
+                    zone: mutation.zone,
+                    task: mutation.task,
+                    at: new Date().toISOString(),
+                    error: mutation.error
+                });
                 json(res, 500, {
                     error: "mutation_processing_failed",
                     mutationId: mutation.mutationId,
@@ -170,6 +241,25 @@ export function createMainlineServer(options = {}) {
         }
         json(res, 404, { error: "not_found", path: url.pathname });
     });
+    const liveClients = new Set();
+    const wss = new WebSocketServer({ server, path: "/ws" });
+    function sendRealtime(payload) {
+        const raw = JSON.stringify(payload);
+        for (const client of liveClients) {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(raw);
+            }
+        }
+    }
+    wss.on("connection", (ws) => {
+        liveClients.add(ws);
+        ws.send(JSON.stringify({ type: "connected", at: new Date().toISOString() }));
+        ws.on("close", () => {
+            liveClients.delete(ws);
+        });
+    });
+    server.__wss = wss;
+    return server;
 }
 export function listenMainlineServer(options = {}) {
     const env = loadMainlineEnv();
@@ -182,6 +272,8 @@ export function listenMainlineServer(options = {}) {
             resolve({
                 port: actualPort,
                 close: () => new Promise((res, rej) => {
+                    const mainlineServer = server;
+                    mainlineServer.__wss?.close();
                     server.close((err) => (err ? rej(err) : res(undefined)));
                 })
             });

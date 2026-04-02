@@ -6,13 +6,20 @@
  *
  * Env: MAINLINE_BACKEND_URL (default http://127.0.0.1:3847/cursor/hook)
  */
-import { readFile } from "node:fs/promises";
-
 const event = process.argv[2] ?? "unknown";
+
+/** Read hook JSON from stdin (Cursor pipes JSON here). `fs.readFile(0)` is unreliable on Node 20+. */
+async function readStdin() {
+  const chunks = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
 
 let stdin = "";
 try {
-  stdin = await readFile(0, "utf8");
+  stdin = await readStdin();
 } catch {
   stdin = "";
 }

@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runScenario } from "./runner.js";
+import { generateDiagnosis } from "./engine/diagnosis.js";
+import type { ScenarioDefinition } from "./schemas/scenario.js";
 
 test("healthy scenario releases", async () => {
   const r = await runScenario("healthy");
@@ -19,4 +21,59 @@ test("infected-healed repairs after retry", async () => {
   assert.equal(r.finalVerdict, "released");
   assert.equal(r.retry.attempted, true);
   assert.equal(r.retry.succeeded, true);
+});
+
+test("diagnosis merges verificationFailures when tests fail (live data not dropped)", () => {
+  const scenario: ScenarioDefinition = {
+    scenarioId: "live-test",
+    patchId: "PATCH-LIVE",
+    task: "task",
+    zone: "Tests",
+    patch: {
+      filesChanged: ["src/foo.ts"],
+      diffSummary: "diff"
+    },
+    initialChecks: {
+      tests: { status: "failed", summary: "3 tests failed" },
+      lint: { status: "passed", summary: "ok" },
+      typecheck: { status: "passed", summary: "ok" }
+    },
+    diagnosisHints: []
+  };
+  const vf = [
+    { category: "test" as const, message: "expected 1 === 2", file: "src/foo.ts" }
+  ];
+  const d = generateDiagnosis({
+    scenario,
+    protectedMatches: [],
+    verificationFailures: vf
+  });
+  assert.equal(d.code, "quality_regression");
+  assert.ok(d.symptoms.some((s) => s.includes("[test]")));
+  assert.ok(d.symptoms.some((s) => s.includes("src/foo.ts")));
+  assert.equal(d.failingFile, "src/foo.ts");
+});
+
+test("diagnosis is mixed_regression when lint and typecheck fail but tests pass", () => {
+  const scenario: ScenarioDefinition = {
+    scenarioId: "lint-type-mixed",
+    patchId: "PATCH-LT",
+    task: "task",
+    zone: "API",
+    patch: {
+      filesChanged: ["src/api.ts"],
+      diffSummary: "diff"
+    },
+    initialChecks: {
+      tests: { status: "passed", summary: "all tests passed" },
+      lint: { status: "failed", summary: "2 eslint errors" },
+      typecheck: { status: "failed", summary: "TS2322 in api.ts" }
+    },
+    diagnosisHints: []
+  };
+  const d = generateDiagnosis({ scenario, protectedMatches: [] });
+  assert.equal(d.code, "mixed_regression");
+  assert.equal(d.failureType, "mixed");
+  assert.ok(d.symptoms.some((s) => s.includes("eslint")));
+  assert.ok(d.symptoms.some((s) => s.includes("TS2322")));
 });

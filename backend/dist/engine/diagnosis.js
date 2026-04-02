@@ -2,6 +2,14 @@ function pickPrimaryFile(scenario) {
     const [first] = scenario.patch.filesChanged;
     return first ?? null;
 }
+function verificationFailureLines(verificationFailures) {
+    if (!verificationFailures?.length)
+        return [];
+    return verificationFailures.map((f) => `[${f.category}] ${f.message}${f.file ? ` (${f.file})` : ""}`);
+}
+function pickFailingFileFromVerification(verificationFailures, fallback) {
+    return verificationFailures?.find((f) => f.file)?.file ?? fallback;
+}
 export function generateDiagnosis(input) {
     const { scenario, protectedMatches, verificationFailures } = input;
     const hints = scenario.diagnosisHints.map((hint) => hint.toLowerCase());
@@ -36,18 +44,21 @@ export function generateDiagnosis(input) {
     const testsFailed = scenario.initialChecks.tests.status === "failed";
     const lintFailed = scenario.initialChecks.lint.status === "failed";
     const typeFailed = scenario.initialChecks.typecheck.status === "failed";
+    const vfLines = verificationFailureLines(verificationFailures);
+    const vfFile = pickFailingFileFromVerification(verificationFailures, failingFile);
     if (testsFailed && (lintFailed || typeFailed)) {
         const symptoms = [
             scenario.initialChecks.tests.summary,
             lintFailed ? scenario.initialChecks.lint.summary : "",
-            typeFailed ? scenario.initialChecks.typecheck.summary : ""
+            typeFailed ? scenario.initialChecks.typecheck.summary : "",
+            ...vfLines
         ].filter(Boolean);
         return {
             code: "mixed_regression",
             summary: "Multiple verification gates failed after the patch.",
             evidence: symptoms,
             symptoms,
-            failingFile,
+            failingFile: vfFile,
             failureType: "mixed",
             likelyCause: "Patch introduced breaking behavior across tests and static analysis."
         };
@@ -55,44 +66,73 @@ export function generateDiagnosis(input) {
     if (testsFailed) {
         const symptoms = [
             scenario.initialChecks.tests.summary,
-            `Diff context: ${scenario.patch.diffSummary}`
+            `Diff context: ${scenario.patch.diffSummary}`,
+            ...vfLines
+        ];
+        const evidence = [
+            scenario.initialChecks.tests.summary,
+            scenario.patch.diffSummary,
+            ...vfLines
         ];
         return {
             code: "quality_regression",
             summary: "Patch introduced a regression that broke the test suite.",
-            evidence: [scenario.initialChecks.tests.summary, scenario.patch.diffSummary],
+            evidence,
             symptoms,
-            failingFile,
+            failingFile: vfFile,
             failureType: "test_failure",
             likelyCause: "Behavior change broke existing expectations or contracts."
         };
     }
+    /** Lint + typecheck both failed while tests passed: mixed static-analysis regression. */
+    if (lintFailed && typeFailed) {
+        const symptoms = [
+            scenario.initialChecks.lint.summary,
+            scenario.initialChecks.typecheck.summary,
+            ...vfLines
+        ].filter(Boolean);
+        return {
+            code: "mixed_regression",
+            summary: "Multiple verification gates failed after the patch.",
+            evidence: symptoms,
+            symptoms,
+            failingFile: vfFile,
+            failureType: "mixed",
+            likelyCause: "Patch introduced issues in both lint and typecheck without failing the test suite."
+        };
+    }
     if (lintFailed) {
-        const symptoms = [scenario.initialChecks.lint.summary];
+        const symptoms = [scenario.initialChecks.lint.summary, ...vfLines];
+        const evidence = [scenario.initialChecks.lint.summary, scenario.patch.diffSummary, ...vfLines];
         return {
             code: "lint_regression",
             summary: "Lint gate reported new or unresolved issues.",
-            evidence: [scenario.initialChecks.lint.summary, scenario.patch.diffSummary],
+            evidence,
             symptoms,
-            failingFile,
+            failingFile: vfFile,
             failureType: "lint_error",
             likelyCause: "Style, unused code, or rule violations introduced by the patch."
         };
     }
     if (typeFailed) {
-        const symptoms = [scenario.initialChecks.typecheck.summary];
+        const symptoms = [scenario.initialChecks.typecheck.summary, ...vfLines];
+        const evidence = [
+            scenario.initialChecks.typecheck.summary,
+            scenario.patch.diffSummary,
+            ...vfLines
+        ];
         return {
             code: "type_regression",
             summary: "TypeScript typecheck failed after the patch.",
-            evidence: [scenario.initialChecks.typecheck.summary, scenario.patch.diffSummary],
+            evidence,
             symptoms,
-            failingFile,
+            failingFile: vfFile,
             failureType: "type_error",
             likelyCause: "Return types, nullability, or API contracts no longer line up."
         };
     }
     if (verificationFailures && verificationFailures.length > 0) {
-        const symptoms = verificationFailures.map((f) => `[${f.category}] ${f.message}${f.file ? ` (${f.file})` : ""}`);
+        const symptoms = verificationFailureLines(verificationFailures);
         return {
             code: "mixed_regression",
             summary: "Live verification reported structured failures.",

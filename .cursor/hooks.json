@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterAgentResponse": [
+      {
+        "command": "node scripts/cursor-hook-bridge.mjs afterAgentResponse"
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "command": "node scripts/cursor-hook-bridge.mjs afterShellExecution"
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "node scripts/cursor-hook-bridge.mjs afterFileEdit"
+      }
+    ],
+    "stop": [
+      {
+        "command": "node scripts/cursor-hook-bridge.mjs stop"
+      }
+    ]
+  }
+}

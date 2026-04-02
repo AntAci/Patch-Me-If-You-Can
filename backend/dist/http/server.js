@@ -6,6 +6,9 @@ const SCENARIOS = new Set([
     "infected-healed",
     "protected-zone-blocked"
 ]);
+/** Ring buffer of Cursor hook events (for demo / debugging). */
+const CURSOR_HOOK_LOG = [];
+const CURSOR_HOOK_LOG_MAX = 100;
 function json(res, status, body) {
     const payload = JSON.stringify(body, null, 2);
     res.writeHead(status, {
@@ -14,6 +17,14 @@ function json(res, status, body) {
     });
     res.end(payload);
 }
+function readBody(req) {
+    return new Promise((resolve, reject) => {
+        const chunks = [];
+        req.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+        req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+        req.on("error", reject);
+    });
+}
 export function createMainlineServer(options = {}) {
     const live = options.liveWorkspacePath ?? process.env.MAINLINE_LIVE_WORKSPACE;
     return createServer(async (req, res) => {
@@ -21,7 +32,7 @@ export function createMainlineServer(options = {}) {
         if (req.method === "OPTIONS") {
             res.writeHead(204, {
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
                 "Access-Control-Allow-Headers": "Content-Type"
             });
             res.end();
@@ -50,6 +61,40 @@ export function createMainlineServer(options = {}) {
         }
         if (url.pathname === "/scenarios" && req.method === "GET") {
             json(res, 200, { scenarios: [...SCENARIOS] });
+            return;
+        }
+        /** Cursor IDE hooks bridge (see `.cursor/hooks.json` + `scripts/cursor-hook-bridge.mjs`). */
+        if (url.pathname === "/cursor/hook" && req.method === "POST") {
+            let bodyText = "";
+            try {
+                bodyText = await readBody(req);
+            }
+            catch {
+                json(res, 400, { error: "read_body_failed" });
+                return;
+            }
+            let parsed = {};
+            try {
+                parsed = JSON.parse(bodyText || "{}");
+            }
+            catch {
+                json(res, 400, { error: "invalid_json" });
+                return;
+            }
+            const event = parsed.event ?? "unknown";
+            CURSOR_HOOK_LOG.push({
+                at: new Date().toISOString(),
+                event,
+                payload: parsed.payload ?? parsed
+            });
+            if (CURSOR_HOOK_LOG.length > CURSOR_HOOK_LOG_MAX) {
+                CURSOR_HOOK_LOG.splice(0, CURSOR_HOOK_LOG.length - CURSOR_HOOK_LOG_MAX);
+            }
+            json(res, 200, { ok: true, received: true, event });
+            return;
+        }
+        if (url.pathname === "/cursor/hook/recent" && req.method === "GET") {
+            json(res, 200, { hooks: [...CURSOR_HOOK_LOG].reverse() });
             return;
         }
         json(res, 404, { error: "not_found", path: url.pathname });

@@ -27,9 +27,10 @@ function cloneChecks(checks) {
         typecheck: { ...checks.typecheck }
     };
 }
-export function runPipeline(scenario) {
+export function runPipeline(scenario, options = {}) {
     const protectedFiles = scenario.protectedFiles ?? [...PROTECTED_FILES];
     const { timeline, push } = createTimelineRecorder();
+    const verificationFailures = options.verificationFailures;
     push("scenario_received", 0, { scenarioId: scenario.scenarioId, patchId: scenario.patchId });
     push("patch_loaded", 0, {
         filesChanged: scenario.patch.filesChanged.join(","),
@@ -41,7 +42,7 @@ export function runPipeline(scenario) {
         push("protected_zone_check_blocked", 0, {
             matchedFiles: protectedMatches.join(",")
         });
-        const diagnosis = generateDiagnosis({ scenario, protectedMatches });
+        const diagnosis = generateDiagnosis({ scenario, protectedMatches, verificationFailures });
         const treatment = generateTreatment(diagnosis);
         const checks = cloneChecks(scenario.initialChecks);
         push("health_classified", 0, { health: "infected" });
@@ -50,10 +51,7 @@ export function runPipeline(scenario) {
         push("treatment_generated", 0, { strategy: treatment.strategy });
         push("final_verdict_issued", 0, { finalVerdict: "blocked" });
         return buildResult({
-            scenarioId: scenario.scenarioId,
-            patchId: scenario.patchId,
-            task: scenario.task,
-            zone: scenario.zone,
+            scenario,
             health: "infected",
             finalVerdict: "blocked",
             quarantined: true,
@@ -63,7 +61,8 @@ export function runPipeline(scenario) {
             protectedMatches,
             retryAttempted: false,
             retrySucceeded: false,
-            timeline
+            timeline,
+            verificationFailures
         });
     }
     push("protected_zone_check_passed", 0, { violated: false });
@@ -77,16 +76,13 @@ export function runPipeline(scenario) {
     });
     push("health_classified", 0, { health: initialHealth });
     if (initialHealth === "healthy") {
-        const diagnosis = generateDiagnosis({ scenario, protectedMatches });
+        const diagnosis = generateDiagnosis({ scenario, protectedMatches, verificationFailures });
         const treatment = generateTreatment(diagnosis);
         push("diagnosis_generated", 0, { code: diagnosis.code });
         push("treatment_generated", 0, { strategy: treatment.strategy });
         push("final_verdict_issued", 0, { finalVerdict: "released" });
         return buildResult({
-            scenarioId: scenario.scenarioId,
-            patchId: scenario.patchId,
-            task: scenario.task,
-            zone: scenario.zone,
+            scenario,
             health: "healthy",
             finalVerdict: "released",
             quarantined: false,
@@ -96,19 +92,24 @@ export function runPipeline(scenario) {
             protectedMatches,
             retryAttempted: false,
             retrySucceeded: false,
-            timeline
+            timeline,
+            verificationFailures
         });
     }
-    const diagnosis = generateDiagnosis({ scenario, protectedMatches });
+    const diagnosis = generateDiagnosis({ scenario, protectedMatches, verificationFailures });
     const treatment = generateTreatment(diagnosis);
     push("patch_quarantined", 0, { quarantined: true });
     push("diagnosis_generated", 0, { code: diagnosis.code });
     push("treatment_generated", 0, { strategy: treatment.strategy });
-    if (initialHealth === "infected" && treatment.strategy === "retry_patch" && scenario.retryChecks) {
+    const retryChecksDef = scenario.retryChecks;
+    const shouldRetry = (initialHealth === "infected" || initialHealth === "suspicious") &&
+        treatment.strategy === "retry_patch" &&
+        Boolean(retryChecksDef);
+    if (shouldRetry && retryChecksDef) {
         push("retry_started", 1, { strategy: treatment.strategy });
         push("retry_patch_applied", 1, { applied: true });
         push("recheck_started", 1);
-        const retryChecks = cloneChecks(scenario.retryChecks);
+        const retryChecks = cloneChecks(retryChecksDef);
         pushCheckEvents(retryChecks, 1, push);
         const retryHealth = classifyHealth({
             checks: retryChecks,
@@ -119,10 +120,7 @@ export function runPipeline(scenario) {
         const finalVerdict = retryHealth === "healthy" ? "released" : "quarantined";
         push("final_verdict_issued", 1, { finalVerdict });
         return buildResult({
-            scenarioId: scenario.scenarioId,
-            patchId: scenario.patchId,
-            task: scenario.task,
-            zone: scenario.zone,
+            scenario,
             health: retryHealth,
             finalVerdict,
             quarantined: finalVerdict !== "released",
@@ -132,15 +130,13 @@ export function runPipeline(scenario) {
             protectedMatches,
             retryAttempted: true,
             retrySucceeded: retryHealth === "healthy",
-            timeline
+            timeline,
+            verificationFailures
         });
     }
     push("final_verdict_issued", 0, { finalVerdict: "quarantined" });
     return buildResult({
-        scenarioId: scenario.scenarioId,
-        patchId: scenario.patchId,
-        task: scenario.task,
-        zone: scenario.zone,
+        scenario,
         health: initialHealth,
         finalVerdict: "quarantined",
         quarantined: true,
@@ -150,7 +146,8 @@ export function runPipeline(scenario) {
         protectedMatches,
         retryAttempted: false,
         retrySucceeded: false,
-        timeline
+        timeline,
+        verificationFailures
     });
 }
 function pushCheckEvents(checks, attempt, push) {
@@ -168,24 +165,20 @@ function pushCheckEvents(checks, attempt, push) {
     });
 }
 function buildResult(input) {
-    const symptoms = buildSymptoms({
-        checks: input.checks,
-        protectedMatches: input.protectedMatches,
-        diagnosis: input.diagnosis
-    });
+    const { scenario } = input;
     return {
-        scenarioId: input.scenarioId,
-        patchId: input.patchId,
-        task: input.task,
-        zone: input.zone,
-        status: input.health,
-        symptoms,
+        scenarioId: scenario.scenarioId,
+        patchId: scenario.patchId,
+        task: scenario.task,
+        zone: scenario.zone,
+        symptoms: input.diagnosis.symptoms,
         health: input.health,
         finalVerdict: input.finalVerdict,
         quarantined: input.quarantined,
         diagnosis: input.diagnosis,
         treatment: input.treatment,
         checks: input.checks,
+        verificationFailures: input.verificationFailures,
         protectedZone: {
             violated: input.protectedMatches.length > 0,
             matchedFiles: input.protectedMatches
@@ -194,26 +187,7 @@ function buildResult(input) {
             attempted: input.retryAttempted,
             succeeded: input.retrySucceeded
         },
-        timeline: input.timeline
+        timeline: input.timeline,
+        diffSummary: scenario.patch.diffSummary
     };
-}
-function buildSymptoms(input) {
-    const symptoms = [];
-    if (input.protectedMatches.length > 0) {
-        symptoms.push(`Protected zone touched: ${input.protectedMatches.join(", ")}`);
-    }
-    for (const [checkName, result] of Object.entries(input.checks)) {
-        if (result.status === "failed") {
-            symptoms.push(`${checkName} failed: ${result.summary}`);
-        }
-    }
-    for (const evidence of input.diagnosis.evidence) {
-        if (!symptoms.includes(evidence)) {
-            symptoms.push(evidence);
-        }
-    }
-    if (symptoms.length === 0) {
-        symptoms.push("All verification checks passed.");
-    }
-    return symptoms;
 }

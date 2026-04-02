@@ -1,8 +1,8 @@
 {
   "scenarioId": "infected-healed",
-  "patchId": "patch-002",
-  "task": "Fix billing retry handling for failed charges",
-  "zone": "API",
+  "patchId": "PATCH-02",
+  "task": "Fix auth null handling in billing retry path",
+  "zone": "Auth",
   "patch": {
     "filesChanged": ["src/features/billing.ts"],
     "diffSummary": "AI patch introduced regression in billing retry path."

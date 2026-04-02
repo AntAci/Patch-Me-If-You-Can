@@ -15,6 +15,16 @@ export function classifyHealth(input: ClassificationInput): Health {
     return "infected";
   }
 
+  const results = [
+    input.checks.tests.status,
+    input.checks.lint.status,
+    input.checks.typecheck.status
+  ];
+
+  if (results.some((status) => status === "skipped")) {
+    return "infected";
+  }
+
   const hints = input.diagnosisHints.map((hint) => hint.toLowerCase());
   const hasMaliciousHint = hints.some((hint) =>
     ["malicious", "exfiltration", "auth bypass"].some((token) =>
@@ -22,11 +32,6 @@ export function classifyHealth(input: ClassificationInput): Health {
     )
   );
 
-  const results = [
-    input.checks.tests.status,
-    input.checks.lint.status,
-    input.checks.typecheck.status
-  ];
   const failureCount = results.filter((status) => status === "failed").length;
   const hasSoftRiskHint = hints.some((hint) =>
     ["unsafe", "suspicious", "risky", "needs review"].some((token) =>
@@ -34,7 +39,11 @@ export function classifyHealth(input: ClassificationInput): Health {
     )
   );
 
-  if (hasMaliciousHint || input.checks.tests.status === "failed" || failureCount > 1) {
+  if (
+    hasMaliciousHint ||
+    input.checks.tests.status === "failed" ||
+    failureCount > 1
+  ) {
     return "infected";
   }
 

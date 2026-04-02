@@ -1,7 +1,7 @@
 {
     "scenarioId": "healthy",
-    "patchId": "patch-001",
-    "task": "Refine search ranking without affecting protected modules",
+    "patchId": "PATCH-01",
+    "task": "Refactor search scoring in UI layer",
     "zone": "UI",
     "patch": {
         "filesChanged": ["src/features/search.ts"],

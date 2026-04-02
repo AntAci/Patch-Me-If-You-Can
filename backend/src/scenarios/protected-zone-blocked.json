@@ -1,7 +1,7 @@
 {
   "scenarioId": "protected-zone-blocked",
-  "patchId": "patch-003",
-  "task": "Update session validation while adjusting profile rendering",
+  "patchId": "PATCH-03",
+  "task": "Change session validation and profile rendering",
   "zone": "Auth",
   "patch": {
     "filesChanged": ["src/auth/session.ts", "src/features/profile.ts"],

@@ -11,10 +11,9 @@ export function serializeError(err) {
     try {
       out[key] = err[key];
     } catch {
-      // ignore
+      // ignore non-enumerable / accessor issues
     }
   }
 
   return out;
 }
-

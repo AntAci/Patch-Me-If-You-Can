@@ -8,6 +8,8 @@ export const LEVELS = Object.freeze({
   silent: 70
 });
 
+const ORDERED = Object.entries(LEVELS).sort((a, b) => a[1] - b[1]);
+
 export function normalizeLevel(level) {
   if (typeof level === "number" && Number.isFinite(level)) return level;
   if (typeof level !== "string") return LEVELS.info;
@@ -21,10 +23,13 @@ export function levelToNumber(level) {
 
 export function numberToLevelName(num) {
   const n = normalizeLevel(num);
-  const entries = Object.entries(LEVELS).sort((a, b) => a[1] - b[1]);
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const [name, val] = entries[i];
-    if (n >= val) return name;
+  let best = "info";
+  let bestVal = -Infinity;
+  for (const [name, val] of ORDERED) {
+    if (val <= n && val >= bestVal) {
+      best = name;
+      bestVal = val;
+    }
   }
-  return "info";
+  return best;
 }

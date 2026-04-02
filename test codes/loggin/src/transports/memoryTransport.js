@@ -1,18 +1,17 @@
 export function createMemoryTransport() {
-  const entries = [];
   const lines = [];
+  const entries = [];
 
   return {
-    entries,
     lines,
+    entries,
     write(line, entry) {
       lines.push(line);
       if (entry) entries.push(entry);
     },
     clear() {
-      entries.length = 0;
       lines.length = 0;
+      entries.length = 0;
     }
   };
 }
-

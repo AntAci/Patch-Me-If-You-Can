@@ -1,10 +1,10 @@
 import { safeJsonStringify } from "../utils/safeJson.js";
 
-function color(code, s) {
+function ansi(code, s) {
   return `\u001b[${code}m${s}\u001b[0m`;
 }
 
-function levelColor(levelName) {
+function levelCode(levelName) {
   switch (levelName) {
     case "trace":
       return 90;
@@ -23,36 +23,32 @@ function levelColor(levelName) {
   }
 }
 
-function pickMeta(entry) {
+function restMeta(entry) {
   const { time, level, levelName, msg, err, ...rest } = entry;
   return rest;
 }
 
 export function formatPrettyLine(entry) {
+  const useColor = Boolean(process?.stdout?.isTTY);
   const time = entry.time ?? "";
   const name = entry.name ? ` ${entry.name}` : "";
-  const levelName = String(entry.levelName ?? "").toUpperCase().padEnd(5, " ");
-  const useColor = Boolean(process?.stdout?.isTTY);
-  const lvl = useColor ? color(levelColor(entry.levelName), levelName) : levelName;
+  const lvlRaw = String(entry.levelName ?? "").toUpperCase().padEnd(5, " ");
+  const lvl = useColor ? ansi(levelCode(entry.levelName), lvlRaw) : lvlRaw;
 
-  let line = `${time} ${lvl}${name}`;
-  if (entry.msg) line += ` ${entry.msg}`;
-  line += "\n";
+  let out = `${time} ${lvl}${name}`;
+  if (entry.msg) out += ` ${entry.msg}`;
+  out += "\n";
 
   if (entry.err) {
     const e = entry.err;
-    const header = e.name ? `${e.name}: ${e.message ?? ""}` : `${e.message ?? ""}`;
-    line += useColor ? color(31, header) : header;
-    line += "\n";
-    if (e.stack) line += String(e.stack) + "\n";
+    const head = e.name ? `${e.name}: ${e.message ?? ""}` : String(e.message ?? "");
+    out += (useColor ? ansi(31, head) : head) + "\n";
+    if (e.stack) out += String(e.stack) + "\n";
   }
 
-  const meta = pickMeta(entry);
+  const meta = restMeta(entry);
   const keys = Object.keys(meta);
-  if (keys.length) {
-    line += safeJsonStringify(meta) + "\n";
-  }
+  if (keys.length) out += safeJsonStringify(meta) + "\n";
 
-  return line;
+  return out;
 }
-

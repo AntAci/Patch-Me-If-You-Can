@@ -1,45 +1,41 @@
 # loggin
 
-`loggin` is a small, dependency-free logging toolkit you can drop into Node.js scripts.
+Self-contained logging for Node.js 18+. No npm dependencies—only `node:fs`, `node:path`, `node:async_hooks`.
 
-## Features
+## Layout
 
-- Multiple log levels (`trace` → `fatal`, plus `silent`)
-- JSON logs (machine-friendly) and pretty logs (human-friendly)
-- Pluggable transports (console, file, rotating file, memory)
-- Child loggers with persistent bindings (e.g. `service`, `requestId`)
-- Optional async context tracking via `AsyncLocalStorage`
+- `src/logger.js` — `createLogger`, child loggers, level filtering
+- `src/levels.js` — numeric levels and names
+- `src/format/` — JSON line and pretty (TTY-colored) output
+- `src/transports/` — console, file, rotating file, in-memory (tests)
+- `src/context/asyncContext.js` — `AsyncLocalStorage` helpers for request-scoped fields
 
 ## Quick start
 
-From inside this folder:
-
 ```bash
+cd "test codes/loggin"
 npm test
 npm run example:basic
 ```
 
-## Usage
+## Minimal usage
 
 ```js
-import { createLogger } from "./src/index.js";
-import { createConsoleTransport } from "./src/index.js";
+import { createLogger, createConsoleTransport } from "./src/index.js";
 
 const log = createLogger({
-  name: "demo",
+  name: "app",
   level: "info",
   format: "pretty",
   transport: createConsoleTransport()
 });
 
-log.info("hello", { answer: 42 });
-log.warn("careful!");
-log.error(new Error("boom"), "something failed");
+log.info("server up", { port: 3000 });
+log.error(new Error("failed"), "request", { path: "/api" });
 ```
 
-## Examples
+## CLI
 
-- `npm run example:basic`
-- `npm run example:file`
-- `npm run example:http`
-
+```bash
+node ./bin/loggin.mjs --level info --format pretty "hello world"
+```

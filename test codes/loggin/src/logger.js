@@ -39,10 +39,9 @@ function normalizeArgs(args) {
   return { err, msg, data };
 }
 
-function makeFormatter(format) {
+function pickFormatter(format) {
   const f = (format ?? "json").toLowerCase();
-  if (f === "pretty") return formatPrettyLine;
-  return formatJsonLine;
+  return f === "pretty" ? formatPrettyLine : formatJsonLine;
 }
 
 export function createLogger(options = {}) {
@@ -57,34 +56,35 @@ export function createLogger(options = {}) {
     context
   } = options;
 
-  const allTransports = [];
-  if (transport) allTransports.push(transport);
-  if (Array.isArray(transports)) allTransports.push(...transports);
-  if (allTransports.length === 0) {
+  const list = [];
+  if (transport) list.push(transport);
+  if (Array.isArray(transports)) list.push(...transports);
+  if (list.length === 0) {
     throw new Error(
-      "createLogger requires a transport/transports (e.g. createConsoleTransport())"
+      "createLogger needs transport or transports (e.g. createConsoleTransport())"
     );
   }
 
-  const formatter = makeFormatter(format);
-  const baseBindings = Object.assign(Object.create(null), base ?? {});
-  if (name) baseBindings.name = name;
+  const formatter = pickFormatter(format);
+  const bindings = Object.assign(Object.create(null), base ?? {});
+  if (name) bindings.name = name;
 
-  function writeToTransports(line, entry) {
-    for (const t of allTransports) {
+  let threshold = normalizeLevel(level);
+
+  function emit(line, entry) {
+    for (const t of list) {
       try {
         if (typeof t.write === "function") t.write(line, entry);
       } catch {
-        // ignore transport errors
+        // transport failure must not throw
       }
     }
   }
 
   function buildEntry(levelNum, args) {
     const { err, msg, data } = normalizeArgs(args);
-    const ctx = context?.get?.() ?? undefined;
-
-    const entry = Object.assign(Object.create(null), baseBindings);
+    const ctx = context?.get?.();
+    const entry = Object.assign(Object.create(null), bindings);
     if (ctx && typeof ctx === "object") Object.assign(entry, ctx);
 
     entry.time = now();
@@ -93,11 +93,8 @@ export function createLogger(options = {}) {
     if (msg !== undefined) entry.msg = msg;
     if (data) Object.assign(entry, data);
     if (err) entry.err = serializeError(err);
-
     return entry;
   }
-
-  let threshold = normalizeLevel(level);
 
   const logger = {
     setLevel(next) {
@@ -106,24 +103,22 @@ export function createLogger(options = {}) {
     getLevel() {
       return threshold;
     },
-    child(bindings) {
+    child(extra) {
       return createLogger({
         name,
         level: threshold,
         format,
-        transport,
-        transports: allTransports,
+        transports: list,
         now,
         context,
-        base: Object.assign(Object.create(null), baseBindings, bindings ?? {})
+        base: Object.assign(Object.create(null), bindings, extra ?? {})
       });
     },
     log(levelLike, ...args) {
       const levelNum = normalizeLevel(levelLike);
       if (levelNum < threshold || threshold >= LEVELS.silent) return;
       const entry = buildEntry(levelNum, args);
-      const line = formatter(entry);
-      writeToTransports(line, entry);
+      emit(formatter(entry), entry);
       return entry;
     },
     trace(...args) {
@@ -145,7 +140,7 @@ export function createLogger(options = {}) {
       return logger.log(LEVELS.fatal, ...args);
     },
     close() {
-      for (const t of allTransports) {
+      for (const t of list) {
         try {
           t.close?.();
         } catch {
@@ -157,4 +152,3 @@ export function createLogger(options = {}) {
 
   return logger;
 }
-

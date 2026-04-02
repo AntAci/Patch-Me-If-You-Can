@@ -2,19 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 export function createFileTransport(options) {
-  if (!options || typeof options !== "object") {
-    throw new Error("createFileTransport requires { filePath }");
+  if (!options?.filePath || typeof options.filePath !== "string") {
+    throw new Error("createFileTransport({ filePath: string })");
   }
 
   const { filePath, mkdir = true } = options;
-  if (!filePath || typeof filePath !== "string") {
-    throw new Error("createFileTransport requires { filePath: string }");
-  }
-
-  if (mkdir) {
-    const dir = path.dirname(filePath);
-    fs.mkdirSync(dir, { recursive: true });
-  }
+  if (mkdir) fs.mkdirSync(path.dirname(filePath), { recursive: true });
 
   const stream = fs.createWriteStream(filePath, { flags: "a" });
 
@@ -31,4 +24,3 @@ export function createFileTransport(options) {
     }
   };
 }
-

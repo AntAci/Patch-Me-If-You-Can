@@ -1,28 +1,25 @@
 {
   "name": "loggin",
-  "version": "0.1.0",
-  "description": "A small, dependency-free logging toolkit (console/file/rotation/context).",
+  "version": "1.0.0",
+  "description": "Standalone Node.js logging toolkit (no deps): levels, JSON/pretty, transports, async context.",
   "type": "module",
   "main": "./src/index.js",
   "exports": {
     ".": "./src/index.js"
   },
+  "bin": {
+    "loggin": "./bin/loggin.mjs"
+  },
   "scripts": {
     "test": "node --test",
     "example:basic": "node ./examples/basic.mjs",
     "example:file": "node ./examples/file.mjs",
-    "example:http": "node ./examples/http-server.mjs",
-    "cli": "node ./bin/loggin.mjs --help"
+    "example:rotate": "node ./examples/rotate.mjs",
+    "example:http": "node ./examples/http-server.mjs"
   },
   "engines": {
     "node": ">=18"
   },
-  "keywords": [
-    "logging",
-    "logger",
-    "json",
-    "pretty",
-    "transport"
-  ],
+  "keywords": ["logging", "logger", "json", "transport"],
   "license": "MIT"
 }

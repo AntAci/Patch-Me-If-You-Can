@@ -1,15 +1,14 @@
 import { createConsoleTransport, createLogger } from "../src/index.js";
 
 const log = createLogger({
-  name: "basic-example",
+  name: "basic",
   level: "trace",
   format: "pretty",
   transport: createConsoleTransport()
 });
 
-log.trace("trace message", { a: 1 });
-log.debug("debug message");
+log.trace("trace", { n: 1 });
+log.debug("debug");
 log.info("hello", { answer: 42 });
-log.warn("watch out", { feature: "demo" });
-log.error(new Error("boom"), "something failed");
-
+log.warn("warn", { tag: "demo" });
+log.error(new Error("boom"), "failed");

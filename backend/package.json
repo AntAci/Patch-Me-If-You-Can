@@ -5,10 +5,19 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "run:scenario": "node dist/cli/run-scenario.js"
+    "run:scenario": "node dist/cli/run-scenario.js",
+    "serve": "node dist/server.js"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "^24.6.0",
+    "@types/ws": "^8.18.1",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "ws": "^8.20.0"
   }
 }

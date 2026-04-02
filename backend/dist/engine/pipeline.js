@@ -51,6 +51,9 @@ export function runPipeline(scenario) {
         push("final_verdict_issued", 0, { finalVerdict: "blocked" });
         return buildResult({
             scenarioId: scenario.scenarioId,
+            patchId: scenario.patchId,
+            task: scenario.task,
+            zone: scenario.zone,
             health: "infected",
             finalVerdict: "blocked",
             quarantined: true,
@@ -81,6 +84,9 @@ export function runPipeline(scenario) {
         push("final_verdict_issued", 0, { finalVerdict: "released" });
         return buildResult({
             scenarioId: scenario.scenarioId,
+            patchId: scenario.patchId,
+            task: scenario.task,
+            zone: scenario.zone,
             health: "healthy",
             finalVerdict: "released",
             quarantined: false,
@@ -114,6 +120,9 @@ export function runPipeline(scenario) {
         push("final_verdict_issued", 1, { finalVerdict });
         return buildResult({
             scenarioId: scenario.scenarioId,
+            patchId: scenario.patchId,
+            task: scenario.task,
+            zone: scenario.zone,
             health: retryHealth,
             finalVerdict,
             quarantined: finalVerdict !== "released",
@@ -129,6 +138,9 @@ export function runPipeline(scenario) {
     push("final_verdict_issued", 0, { finalVerdict: "quarantined" });
     return buildResult({
         scenarioId: scenario.scenarioId,
+        patchId: scenario.patchId,
+        task: scenario.task,
+        zone: scenario.zone,
         health: initialHealth,
         finalVerdict: "quarantined",
         quarantined: true,
@@ -156,8 +168,18 @@ function pushCheckEvents(checks, attempt, push) {
     });
 }
 function buildResult(input) {
+    const symptoms = buildSymptoms({
+        checks: input.checks,
+        protectedMatches: input.protectedMatches,
+        diagnosis: input.diagnosis
+    });
     return {
         scenarioId: input.scenarioId,
+        patchId: input.patchId,
+        task: input.task,
+        zone: input.zone,
+        status: input.health,
+        symptoms,
         health: input.health,
         finalVerdict: input.finalVerdict,
         quarantined: input.quarantined,
@@ -174,4 +196,24 @@ function buildResult(input) {
         },
         timeline: input.timeline
     };
+}
+function buildSymptoms(input) {
+    const symptoms = [];
+    if (input.protectedMatches.length > 0) {
+        symptoms.push(`Protected zone touched: ${input.protectedMatches.join(", ")}`);
+    }
+    for (const [checkName, result] of Object.entries(input.checks)) {
+        if (result.status === "failed") {
+            symptoms.push(`${checkName} failed: ${result.summary}`);
+        }
+    }
+    for (const evidence of input.diagnosis.evidence) {
+        if (!symptoms.includes(evidence)) {
+            symptoms.push(evidence);
+        }
+    }
+    if (symptoms.length === 0) {
+        symptoms.push("All verification checks passed.");
+    }
+    return symptoms;
 }

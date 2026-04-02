@@ -1,6 +1,8 @@
 {
     "scenarioId": "healthy",
     "patchId": "patch-001",
+    "task": "Refine search ranking without affecting protected modules",
+    "zone": "UI",
     "patch": {
         "filesChanged": ["src/features/search.ts"],
         "diffSummary": "Refactor search scoring without changing auth or security modules."

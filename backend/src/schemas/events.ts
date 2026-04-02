@@ -50,6 +50,11 @@ export interface Treatment {
 
 export interface ScenarioRunResult {
   scenarioId: string;
+  patchId: string;
+  task: string;
+  zone: "Auth" | "UI" | "API" | "Config" | "Tests";
+  status: Health;
+  symptoms: string[];
   health: Health;
   finalVerdict: Verdict;
   quarantined: boolean;

@@ -1,6 +1,8 @@
 import { listenMainlineServer } from "../http/server.js";
+import { loadMainlineEnv } from "../config/env.js";
 import { resolveBackendRoot } from "../patch/ingest.js";
 
+const env = loadMainlineEnv();
 const args = process.argv.slice(2);
 let port: number | undefined;
 let livePath: string | undefined;
@@ -18,9 +20,9 @@ for (let i = 0; i < args.length; i++) {
   }
 }
 
-const useLive = Boolean(livePath) || Boolean(process.env.MAINLINE_LIVE_WORKSPACE);
+const useLive = Boolean(livePath) || Boolean(env.liveWorkspace);
 const liveWorkspacePath = useLive
-  ? livePath ?? process.env.MAINLINE_LIVE_WORKSPACE ?? resolveBackendRoot()
+  ? livePath ?? env.liveWorkspace ?? resolveBackendRoot()
   : undefined;
 
 const { port: listeningPort } = await listenMainlineServer({

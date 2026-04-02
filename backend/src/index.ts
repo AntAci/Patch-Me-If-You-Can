@@ -9,13 +9,29 @@ export { runChecksInWorkspace, normalizeFailures } from "./engine/verification.j
 export { generatePatch, applyPatchInTempWorkdir, resolveBackendRoot } from "./patch/ingest.js";
 export { toFrontendContract } from "./contract/frontend.js";
 export { createMainlineServer, listenMainlineServer, type ServerOptions } from "./http/server.js";
+export { loadMainlineEnv, type MainlineEnv } from "./config/env.js";
+export {
+  attachHookEventToMostRecentMutation,
+  createMutationSeed,
+  getMutationById,
+  getRecentMutations,
+  listRecentHookEvents,
+  recordHookEvent,
+  upsertMutation,
+  type MutationRecord,
+  type HookEventRecord
+} from "./mutation/store.js";
+export { normalizeHookMutation } from "./mutation/normalize.js";
+export { processMutation } from "./mutation/process.js";
 export type {
   CheckResult,
   CheckStatus,
   Diagnosis,
   Health,
+  LlmUsage,
   MainlineImmunityContract,
   ScenarioRunResult,
+  ScenarioSource,
   TimelineEvent,
   TimelineEventName,
   Treatment,

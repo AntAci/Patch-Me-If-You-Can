@@ -69,6 +69,7 @@ export interface Treatment {
   whatNotToTouch?: string;
   whatMustBeFixed?: string;
   whatVerificationFailed?: string;
+  suggestedPatch?: string;
 }
 
 /** Shared frontend contract (Person 1 ↔ Person 2). */
@@ -84,11 +85,24 @@ export interface MainlineImmunityContract {
   finalVerdict: Verdict;
 }
 
+export type ScenarioSource = "scenario" | "cursor_hook";
+
+export interface LlmUsage {
+  provider: "openai" | "none";
+  model: string;
+  used: boolean;
+  repairAttempted: boolean;
+  lastError?: string;
+}
+
 export interface ScenarioRunResult {
   scenarioId: string;
   patchId: string;
   task: string;
   zone: string;
+  source?: ScenarioSource;
+  mutationId?: string;
+  status: Health;
   /** Convenience copy of diagnosis.symptoms */
   symptoms: string[];
   health: Health;
@@ -111,7 +125,10 @@ export interface ScenarioRunResult {
     attempted: boolean;
     succeeded: boolean;
   };
+  hookEvents?: string[];
+  filesChanged?: string[];
   timeline: TimelineEvent[];
   /** Risk / observability (nice-to-have). */
   diffSummary?: string;
+  llm?: LlmUsage;
 }

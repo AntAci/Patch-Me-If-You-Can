@@ -1,17 +1,26 @@
 import { createServer } from "node:http";
+import { loadMainlineEnv } from "../config/env.js";
 import type { ScenarioName } from "../schemas/scenario.js";
 import { runScenario } from "../runner.js";
 import { toFrontendContract } from "../contract/frontend.js";
+import {
+  attachHookEventToMostRecentMutation,
+  createMutationSeed,
+  getMutationById,
+  getRecentMutations,
+  type HookEventRecord,
+  listRecentHookEvents,
+  recordHookEvent,
+  upsertMutation
+} from "../mutation/store.js";
+import { normalizeHookMutation } from "../mutation/normalize.js";
+import { processMutation } from "../mutation/process.js";
 
 const SCENARIOS = new Set<ScenarioName>([
   "healthy",
   "infected-healed",
   "protected-zone-blocked"
 ]);
-
-/** Ring buffer of Cursor hook events (for demo / debugging). */
-const CURSOR_HOOK_LOG: Array<{ at: string; event: string; payload: unknown }> = [];
-const CURSOR_HOOK_LOG_MAX = 100;
 
 export interface ServerOptions {
   port?: number;
@@ -37,8 +46,21 @@ function readBody(req: import("node:http").IncomingMessage): Promise<string> {
   });
 }
 
+async function runNamedScenario(
+  name: ScenarioName,
+  liveWorkspacePath?: string,
+  format: "full" | "contract" = "full"
+) {
+  const result = await runScenario(
+    name,
+    liveWorkspacePath ? { liveWorkspacePath } : {}
+  );
+  return format === "contract" ? toFrontendContract(result) : result;
+}
+
 export function createMainlineServer(options: ServerOptions = {}) {
-  const live = options.liveWorkspacePath ?? process.env.MAINLINE_LIVE_WORKSPACE;
+  const env = loadMainlineEnv();
+  const live = options.liveWorkspacePath ?? env.liveWorkspace;
 
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
@@ -54,29 +76,67 @@ export function createMainlineServer(options: ServerOptions = {}) {
     }
 
     if (url.pathname === "/health" && req.method === "GET") {
-      json(res, 200, { ok: true, service: "mainline-immunity" });
-      return;
-    }
-
-    const scenarioMatch = url.pathname.match(/^\/scenario\/([^/]+)\/?$/);
-    if (scenarioMatch && req.method === "GET") {
-      const name = scenarioMatch[1] as ScenarioName;
-      if (!SCENARIOS.has(name)) {
-        json(res, 404, { error: "unknown_scenario", name });
-        return;
-      }
-      try {
-        const result = await runScenario(name, live ? { liveWorkspacePath: live } : {});
-        const contract = url.searchParams.get("format") === "full" ? result : toFrontendContract(result);
-        json(res, 200, contract);
-      } catch (e) {
-        json(res, 500, { error: String(e) });
-      }
+      json(res, 200, {
+        ok: true,
+        service: "mainline-immunity",
+        llmProvider: env.llmProvider,
+        liveMutations: env.enableLiveMutations
+      });
       return;
     }
 
     if (url.pathname === "/scenarios" && req.method === "GET") {
       json(res, 200, { scenarios: [...SCENARIOS] });
+      return;
+    }
+
+    if (url.pathname === "/api/scenarios" && req.method === "GET") {
+      json(res, 200, [...SCENARIOS]);
+      return;
+    }
+
+    const scenarioMatch = url.pathname.match(/^\/scenario\/([^/]+)\/?$/);
+    const legacyScenarioMatch = url.pathname.match(/^\/api\/run\/([^/]+)\/?$/);
+    const scenarioName =
+      (scenarioMatch?.[1] as ScenarioName | undefined) ??
+      (legacyScenarioMatch?.[1] as ScenarioName | undefined);
+
+    if (
+      scenarioName &&
+      (req.method === "GET" ||
+        (legacyScenarioMatch && req.method === "POST"))
+    ) {
+      if (!SCENARIOS.has(scenarioName)) {
+        json(res, 404, { error: "unknown_scenario", name: scenarioName });
+        return;
+      }
+      try {
+        const format = url.searchParams.get("format") === "contract" ? "contract" : "full";
+        json(res, 200, await runNamedScenario(scenarioName, live, format));
+      } catch (error) {
+        json(res, 500, { error: String(error) });
+      }
+      return;
+    }
+
+    if (url.pathname === "/mutations/recent" && req.method === "GET") {
+      json(res, 200, { mutations: getRecentMutations() });
+      return;
+    }
+
+    const mutationMatch = url.pathname.match(/^\/mutation\/([^/]+)\/?$/);
+    if (mutationMatch && req.method === "GET") {
+      const mutation = getMutationById(mutationMatch[1]);
+      if (!mutation) {
+        json(res, 404, { error: "unknown_mutation", mutationId: mutationMatch[1] });
+        return;
+      }
+      json(res, 200, mutation);
+      return;
+    }
+
+    if (url.pathname === "/cursor/hook/recent" && req.method === "GET") {
+      json(res, 200, { hooks: listRecentHookEvents() });
       return;
     }
 
@@ -89,6 +149,7 @@ export function createMainlineServer(options: ServerOptions = {}) {
         json(res, 400, { error: "read_body_failed" });
         return;
       }
+
       let parsed: { event?: string; payload?: unknown } = {};
       try {
         parsed = JSON.parse(bodyText || "{}") as { event?: string; payload?: unknown };
@@ -96,21 +157,60 @@ export function createMainlineServer(options: ServerOptions = {}) {
         json(res, 400, { error: "invalid_json" });
         return;
       }
-      const event = parsed.event ?? "unknown";
-      CURSOR_HOOK_LOG.push({
-        at: new Date().toISOString(),
-        event,
-        payload: parsed.payload ?? parsed
-      });
-      if (CURSOR_HOOK_LOG.length > CURSOR_HOOK_LOG_MAX) {
-        CURSOR_HOOK_LOG.splice(0, CURSOR_HOOK_LOG.length - CURSOR_HOOK_LOG_MAX);
-      }
-      json(res, 200, { ok: true, received: true, event });
-      return;
-    }
 
-    if (url.pathname === "/cursor/hook/recent" && req.method === "GET") {
-      json(res, 200, { hooks: [...CURSOR_HOOK_LOG].reverse() });
+      const hookEvent: HookEventRecord = {
+        at: new Date().toISOString(),
+        event: parsed.event ?? "unknown",
+        payload: parsed.payload ?? parsed
+      };
+      recordHookEvent(hookEvent);
+
+      const normalized = normalizeHookMutation(hookEvent);
+      if (!env.enableLiveMutations || !normalized) {
+        attachHookEventToMostRecentMutation(hookEvent);
+        json(res, 200, {
+          ok: true,
+          received: true,
+          event: hookEvent.event,
+          ingested: false
+        });
+        return;
+      }
+
+      const mutation = upsertMutation(
+        createMutationSeed({
+          task: normalized.task,
+          zone: normalized.zone,
+          filesChanged: normalized.filesChanged,
+          diffSummary: normalized.diffSummary,
+          hookEvent
+        })
+      );
+      mutation.status = "processing";
+      upsertMutation(mutation);
+
+      try {
+        mutation.result = await processMutation(mutation);
+        mutation.status = "completed";
+        upsertMutation(mutation);
+        json(res, 200, {
+          ok: true,
+          received: true,
+          event: hookEvent.event,
+          ingested: true,
+          mutationId: mutation.mutationId,
+          verdict: mutation.result.finalVerdict
+        });
+      } catch (error) {
+        mutation.status = "failed";
+        mutation.error = String(error);
+        upsertMutation(mutation);
+        json(res, 500, {
+          error: "mutation_processing_failed",
+          mutationId: mutation.mutationId,
+          detail: String(error)
+        });
+      }
       return;
     }
 
@@ -119,12 +219,16 @@ export function createMainlineServer(options: ServerOptions = {}) {
 }
 
 export function listenMainlineServer(options: ServerOptions = {}) {
-  const port = options.port ?? (Number(process.env.PORT) || 3847);
+  const env = loadMainlineEnv();
+  const port = options.port ?? env.port;
   const server = createMainlineServer(options);
   return new Promise<{ port: number; close: () => Promise<void> }>((resolve, reject) => {
     server.listen(port, () => {
+      const address = server.address();
+      const actualPort =
+        address && typeof address === "object" ? address.port : port;
       resolve({
-        port,
+        port: actualPort,
         close: () =>
           new Promise((res, rej) => {
             server.close((err) => (err ? rej(err) : res(undefined)));

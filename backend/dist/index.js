@@ -9,3 +9,7 @@ export { runChecksInWorkspace, normalizeFailures } from "./engine/verification.j
 export { generatePatch, applyPatchInTempWorkdir, resolveBackendRoot } from "./patch/ingest.js";
 export { toFrontendContract } from "./contract/frontend.js";
 export { createMainlineServer, listenMainlineServer } from "./http/server.js";
+export { loadMainlineEnv } from "./config/env.js";
+export { attachHookEventToMostRecentMutation, createMutationSeed, getMutationById, getRecentMutations, listRecentHookEvents, recordHookEvent, upsertMutation } from "./mutation/store.js";
+export { normalizeHookMutation } from "./mutation/normalize.js";
+export { processMutation } from "./mutation/process.js";

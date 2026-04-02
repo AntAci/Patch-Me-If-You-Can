@@ -171,6 +171,8 @@ function buildResult(input) {
         patchId: scenario.patchId,
         task: scenario.task,
         zone: scenario.zone,
+        source: "scenario",
+        status: input.health,
         symptoms: input.diagnosis.symptoms,
         health: input.health,
         finalVerdict: input.finalVerdict,

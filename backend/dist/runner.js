@@ -45,6 +45,18 @@ export async function runScenario(name, options = {}) {
     }
     return runPipeline(parsed);
 }
-export async function runScenarioDefinition(scenario, pipelineOptions) {
-    return runPipeline(scenario, pipelineOptions);
+export async function runScenarioDefinition(scenario, options = {}) {
+    const livePath = options.liveWorkspacePath ?? process.env.MAINLINE_LIVE_WORKSPACE;
+    if (livePath) {
+        const live = await runChecksInWorkspace(livePath);
+        const merged = {
+            ...scenario,
+            initialChecks: live.checks
+        };
+        return runPipeline(merged, {
+            ...options,
+            verificationFailures: live.failures
+        });
+    }
+    return runPipeline(scenario, options);
 }

@@ -20,6 +20,10 @@ export interface RunScenarioOptions {
   liveWorkspacePath?: string;
 }
 
+export interface RunScenarioDefinitionOptions extends PipelineOptions {
+  liveWorkspacePath?: string;
+}
+
 export async function runScenario(
   name: ScenarioName,
   options: RunScenarioOptions = {}
@@ -65,7 +69,21 @@ export async function runScenario(
 
 export async function runScenarioDefinition(
   scenario: ScenarioDefinition,
-  pipelineOptions?: PipelineOptions
+  options: RunScenarioDefinitionOptions = {}
 ): Promise<ScenarioRunResult> {
-  return runPipeline(scenario, pipelineOptions);
+  const livePath = options.liveWorkspacePath ?? process.env.MAINLINE_LIVE_WORKSPACE;
+
+  if (livePath) {
+    const live = await runChecksInWorkspace(livePath);
+    const merged: ScenarioDefinition = {
+      ...scenario,
+      initialChecks: live.checks
+    };
+    return runPipeline(merged, {
+      ...options,
+      verificationFailures: live.failures
+    });
+  }
+
+  return runPipeline(scenario, options);
 }

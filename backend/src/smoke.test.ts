@@ -2,6 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runScenario } from "./runner.js";
 import { generateDiagnosis } from "./engine/diagnosis.js";
+import { normalizeHookMutation } from "./mutation/normalize.js";
+import { createMutationSeed } from "./mutation/store.js";
+import { processMutation } from "./mutation/process.js";
 import type { ScenarioDefinition } from "./schemas/scenario.js";
 
 test("healthy scenario releases", async () => {
@@ -76,4 +79,52 @@ test("diagnosis is mixed_regression when lint and typecheck fail but tests pass"
   assert.equal(d.failureType, "mixed");
   assert.ok(d.symptoms.some((s) => s.includes("eslint")));
   assert.ok(d.symptoms.some((s) => s.includes("TS2322")));
+});
+
+test("afterFileEdit hook normalizes into a processed cursor mutation", async () => {
+  const hookEvent = {
+    at: new Date().toISOString(),
+    event: "afterFileEdit",
+    payload: {
+      filePath: "src/features/search.ts"
+    }
+  };
+
+  const normalized = normalizeHookMutation(hookEvent);
+  assert.ok(normalized);
+  const mutation = createMutationSeed({
+    task: normalized.task,
+    zone: normalized.zone,
+    filesChanged: normalized.filesChanged,
+    diffSummary: normalized.diffSummary,
+    hookEvent
+  });
+
+  const result = await processMutation(mutation);
+  assert.equal(result.source, "cursor_hook");
+  assert.equal(result.mutationId, mutation.mutationId);
+  assert.deepEqual(result.filesChanged, ["src/features/search.ts"]);
+});
+
+test("protected auth mutation is blocked from cursor mutation processing", async () => {
+  const hookEvent = {
+    at: new Date().toISOString(),
+    event: "afterFileEdit",
+    payload: {
+      filePath: "src/auth/session.ts"
+    }
+  };
+
+  const normalized = normalizeHookMutation(hookEvent);
+  assert.ok(normalized);
+  const mutation = createMutationSeed({
+    task: normalized.task,
+    zone: normalized.zone,
+    filesChanged: normalized.filesChanged,
+    diffSummary: normalized.diffSummary,
+    hookEvent
+  });
+
+  const result = await processMutation(mutation);
+  assert.equal(result.finalVerdict, "blocked");
 });

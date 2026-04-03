@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { WebSocket, WebSocketServer } from "ws";
 import { loadMainlineEnv } from "../config/env.js";
 import { runScenario } from "../runner.js";
 import { toFrontendContract } from "../contract/frontend.js";
@@ -241,9 +242,24 @@ export function createMainlineServer(options = {}) {
         }
         json(res, 404, { error: "not_found", path: url.pathname });
     });
+    const liveClients = new Set();
+    const wss = new WebSocketServer({ server, path: "/ws" });
     function sendRealtime(payload) {
-        void payload;
+        const raw = JSON.stringify(payload);
+        for (const client of liveClients) {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(raw);
+            }
+        }
     }
+    wss.on("connection", (ws) => {
+        liveClients.add(ws);
+        ws.send(JSON.stringify({ type: "connected", at: new Date().toISOString() }));
+        ws.on("close", () => {
+            liveClients.delete(ws);
+        });
+    });
+    server.__wss = wss;
     return server;
 }
 export function listenMainlineServer(options = {}) {
@@ -257,6 +273,8 @@ export function listenMainlineServer(options = {}) {
             resolve({
                 port: actualPort,
                 close: () => new Promise((res, rej) => {
+                    const mainlineServer = server;
+                    mainlineServer.__wss?.close();
                     server.close((err) => (err ? rej(err) : res(undefined)));
                 })
             });

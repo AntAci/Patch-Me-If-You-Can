@@ -79,6 +79,8 @@ The repo also includes a Cursor hook bridge.
 
 The goal of that piece is to let editor activity be forwarded into the backend as mutation-like events, so the system can react to file edits and visualize them in the same pipeline.
 
+When the backend is running, it also exposes a live websocket feed at `/ws` so the frontend can receive hook, timeline, and mutation-status updates without polling.
+
 ## Repository Layout
 
 - `backend/`
@@ -97,6 +99,7 @@ From `backend/`:
 ```bash
 npm install
 npm run build
+npm run start
 ```
 
 Run scenario output directly:

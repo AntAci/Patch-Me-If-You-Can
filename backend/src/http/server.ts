@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { WebSocket, WebSocketServer } from "ws";
 import { loadMainlineEnv } from "../config/env.js";
 import type { ScenarioName } from "../schemas/scenario.js";
 import type { ScenarioRunResult, TimelineEvent } from "../schemas/events.js";
@@ -315,9 +316,27 @@ export function createMainlineServer(options: ServerOptions = {}) {
     json(res, 404, { error: "not_found", path: url.pathname });
   });
 
+  const liveClients = new Set<WebSocket>();
+  const wss = new WebSocketServer({ server, path: "/ws" });
+
   function sendRealtime(payload: RealtimeEvent) {
-    void payload;
+    const raw = JSON.stringify(payload);
+    for (const client of liveClients) {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(raw);
+      }
+    }
   }
+
+  wss.on("connection", (ws) => {
+    liveClients.add(ws);
+    ws.send(JSON.stringify({ type: "connected", at: new Date().toISOString() }));
+    ws.on("close", () => {
+      liveClients.delete(ws);
+    });
+  });
+
+  (server as import("node:http").Server & { __wss?: WebSocketServer }).__wss = wss;
   return server;
 }
 
@@ -334,6 +353,10 @@ export function listenMainlineServer(options: ServerOptions = {}) {
         port: actualPort,
         close: () =>
           new Promise((res, rej) => {
+            const mainlineServer = server as import("node:http").Server & {
+              __wss?: WebSocketServer;
+            };
+            mainlineServer.__wss?.close();
             server.close((err) => (err ? rej(err) : res(undefined)));
           })
       });

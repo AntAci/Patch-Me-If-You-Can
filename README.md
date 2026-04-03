@@ -13,8 +13,7 @@ The current version was assembled in less than 3 hours, so the focus is on demon
 ## Assets
 
 https://github.com/user-attachments/assets/3059b8b1-9c3e-4c2b-be0a-0aaaa75abc15
-
-![Cursur](https://github.com/user-attachments/assets/bd859e35-3732-4939-96b2-aa33da6bce03)
+Whilst Cursur is Generating code in the background.
 
 ## What The Project Does
 

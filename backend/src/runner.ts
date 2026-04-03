@@ -12,6 +12,7 @@ const __dirname = path.dirname(__filename);
 const SCENARIO_FILES: Record<ScenarioName, string> = {
   healthy: "healthy.json",
   "infected-healed": "infected-healed.json",
+  "infected-escalated": "infected-escalated.json",
   "protected-zone-blocked": "protected-zone-blocked.json"
 };
 

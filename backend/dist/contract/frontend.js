@@ -13,9 +13,13 @@ const TIMELINE_LABELS = {
     patch_quarantined: "quarantined",
     diagnosis_generated: "diagnosis_complete",
     treatment_generated: "treatment_issued",
-    retry_started: "healing_pass",
-    retry_patch_applied: "retry_patch_applied",
+    repair_loop_started: "repair_loop_started",
+    repair_attempt_started: "repair_attempt_started",
+    repair_patch_generated: "repair_patch_generated",
+    repair_patch_applied: "repair_patch_applied",
     recheck_started: "recheck_started",
+    repair_attempt_failed: "repair_attempt_failed",
+    repair_attempt_succeeded: "repair_attempt_succeeded",
     final_verdict_issued: "verdict_issued"
 };
 /**
@@ -32,6 +36,9 @@ export function toFrontendContract(result) {
         diagnosis: result.diagnosis.summary,
         treatment: result.treatment.prompt,
         timeline,
-        finalVerdict: result.finalVerdict
+        finalVerdict: result.finalVerdict,
+        repairAttempts: result.repairAttempts,
+        policyInstructions: result.policyInstructions,
+        securityAgent: result.securityAgent
     };
 }

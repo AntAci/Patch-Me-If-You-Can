@@ -1,11 +1,35 @@
+import { resolveBackendOrigin } from '../constants';
 import type { ScenarioRunResult, TimelineEvent } from './types';
 import { STATIC_RESULTS } from './staticResults';
+
+function scenarioUrl(name: string) {
+  const origin = resolveBackendOrigin();
+  return origin ? `${origin}/api/run/${name}` : `/api/run/${name}`;
+}
+
+export function getLiveSocketUrl() {
+  const origin = resolveBackendOrigin();
+  if (!origin) return null;
+  const url = new URL(origin);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.pathname = '/ws';
+  url.search = '';
+  url.hash = '';
+  return url.toString();
+}
 
 export async function runScenario(
   name: string,
 ): Promise<ScenarioRunResult> {
+  const origin = resolveBackendOrigin();
+  if (!origin) {
+    const fallback = STATIC_RESULTS[name];
+    if (fallback) return fallback;
+    throw new Error(`No static fallback for scenario: ${name}`);
+  }
+
   try {
-    const res = await fetch(`/api/run/${name}`, { method: 'POST' });
+    const res = await fetch(scenarioUrl(name), { method: 'POST' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return (await res.json()) as ScenarioRunResult;
   } catch {
@@ -18,9 +42,13 @@ export async function runScenario(
 export function connectLive(
   onEvent: (event: TimelineEvent) => void,
   onStatus?: (connected: boolean) => void,
-): WebSocket {
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${protocol}//${location.host}/ws`);
+): WebSocket | null {
+  const socketUrl = getLiveSocketUrl();
+  if (!socketUrl) {
+    onStatus?.(false);
+    return null;
+  }
+  const ws = new WebSocket(socketUrl);
 
   ws.addEventListener('open', () => onStatus?.(true));
 

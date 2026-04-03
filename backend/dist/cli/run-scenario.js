@@ -23,12 +23,13 @@ export async function runScenarioCli(argv) {
     }
     const scenarioName = positional[0];
     if (!scenarioName) {
-        console.error("Usage: node dist/cli/run-scenario.js <healthy|infected-healed|protected-zone-blocked> [--contract] [--live <path>]");
+        console.error("Usage: node dist/cli/run-scenario.js <healthy|infected-healed|infected-escalated|protected-zone-blocked> [--contract] [--live <path>]");
         process.exit(1);
     }
     const knownScenarios = new Set([
         "healthy",
         "infected-healed",
+        "infected-escalated",
         "protected-zone-blocked"
     ]);
     if (!knownScenarios.has(scenarioName)) {

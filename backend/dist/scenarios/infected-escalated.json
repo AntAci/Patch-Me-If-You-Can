@@ -1,0 +1,49 @@
+{
+    "scenarioId": "infected-escalated",
+    "patchId": "PATCH-04",
+    "task": "Repair API response caching without weakening safety checks",
+    "zone": "API",
+    "patch": {
+        "filesChanged": ["src/api/cache.ts"],
+        "diffSummary": "Automated patch regressed cache invalidation and leaked stale billing data."
+    },
+    "protectedFiles": ["src/security/", "src/auth/", "config/secrets.ts", "database/main.sql", "database/schema/", "db/main.sql"],
+    "initialChecks": {
+        "tests": { "status": "failed", "summary": "5 cache consistency tests failed" },
+        "lint": { "status": "passed", "summary": "No lint errors" },
+        "typecheck": { "status": "passed", "summary": "TypeScript clean" }
+    },
+    "repairAttempts": [
+        {
+            "summary": "Attempt 1 tightened cache invalidation but still left one stale response path.",
+            "agentNotes": "Repair only the cache invalidation branch. Do not touch auth, billing schema, or policy files.",
+            "suggestedPatch": "--- a/src/api/cache.ts\n+++ b/src/api/cache.ts\n@@ invalidate @@\n- return cached\n+ return refreshCache()",
+            "checks": {
+                "tests": { "status": "failed", "summary": "2 cache consistency tests still failing" },
+                "lint": { "status": "passed", "summary": "No lint errors" },
+                "typecheck": { "status": "passed", "summary": "TypeScript clean" }
+            }
+        },
+        {
+            "summary": "Attempt 2 restored the eviction call but introduced an async race.",
+            "agentNotes": "Preserve the existing API contract. Do not disable the failing tests.",
+            "suggestedPatch": "--- a/src/api/cache.ts\n+++ b/src/api/cache.ts\n@@ eviction @@\n- evict(key)\n+ await evict(key)",
+            "checks": {
+                "tests": { "status": "failed", "summary": "1 cache timing test still failing" },
+                "lint": { "status": "passed", "summary": "No lint errors" },
+                "typecheck": { "status": "passed", "summary": "TypeScript clean" }
+            }
+        },
+        {
+            "summary": "Attempt 3 remained unsafe under load, so the security agent keeps the patch quarantined.",
+            "agentNotes": "Escalate to a human reviewer rather than changing protected infrastructure or main SQL data.",
+            "suggestedPatch": "--- a/src/api/cache.ts\n+++ b/src/api/cache.ts\n@@ rollback @@\n- warmCache()\n+ scheduleWarmCacheSafely()",
+            "checks": {
+                "tests": { "status": "failed", "summary": "Load-test cache correctness still failing" },
+                "lint": { "status": "passed", "summary": "No lint errors" },
+                "typecheck": { "status": "passed", "summary": "TypeScript clean" }
+            }
+        }
+    ],
+    "diagnosisHints": ["regression", "unsafe caching behavior", "needs review"]
+}

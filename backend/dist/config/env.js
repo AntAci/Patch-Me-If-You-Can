@@ -10,6 +10,12 @@ function parseBoolean(value, defaultValue) {
         return defaultValue;
     return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
+function parseNumber(value, defaultValue) {
+    if (!value)
+        return defaultValue;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
+}
 function parseDotEnv(content) {
     const entries = {};
     for (const rawLine of content.split("\n")) {
@@ -54,7 +60,10 @@ export function loadMainlineEnv() {
         liveWorkspace: process.env.MAINLINE_LIVE_WORKSPACE,
         port: Number(process.env.PORT) || 3847,
         enableLiveMutations: parseBoolean(process.env.MAINLINE_ENABLE_LIVE_MUTATIONS, true),
-        enableAutoRepair: parseBoolean(process.env.MAINLINE_ENABLE_AUTO_REPAIR, true)
+        enableAutoRepair: parseBoolean(process.env.MAINLINE_ENABLE_AUTO_REPAIR, true),
+        maxRepairAttempts: Math.min(3, parseNumber(process.env.MAINLINE_MAX_REPAIR_ATTEMPTS, 3)),
+        securityAgentName: process.env.MAINLINE_SECURITY_AGENT_NAME || "Mainline Sentinel",
+        policyInstructionsRaw: process.env.MAINLINE_POLICY_INSTRUCTIONS
     };
     return cachedEnv;
 }

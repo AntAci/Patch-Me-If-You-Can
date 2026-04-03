@@ -22,10 +22,21 @@ export interface ScenarioDefinition {
     lint: CheckResult;
     typecheck: CheckResult;
   };
+  repairAttempts?: Array<{
+    summary: string;
+    suggestedPatch?: string;
+    agentNotes?: string;
+    checks: {
+      tests: CheckResult;
+      lint: CheckResult;
+      typecheck: CheckResult;
+    };
+  }>;
   diagnosisHints: string[];
 }
 
 export type ScenarioName =
   | "healthy"
   | "infected-healed"
+  | "infected-escalated"
   | "protected-zone-blocked";

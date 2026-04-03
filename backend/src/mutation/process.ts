@@ -63,9 +63,19 @@ export async function processMutation(
 ): Promise<ScenarioRunResult> {
   const env = loadMainlineEnv();
   const scenario = buildScenarioFromMutation(mutation);
+  const client = getModelClient();
+  const securityAgent = {
+    name: env.securityAgentName,
+    mode: client ? "llm" as const : "deterministic" as const,
+    maxRepairAttempts: env.maxRepairAttempts
+  };
   let result = await runScenarioDefinition(
     scenario,
-    env.liveWorkspace ? { liveWorkspacePath: env.liveWorkspace } : {}
+    {
+      ...(env.liveWorkspace ? { liveWorkspacePath: env.liveWorkspace } : {}),
+      policyInstructionsRaw: env.policyInstructionsRaw,
+      securityAgent
+    }
   );
 
   let llm: LlmUsage = {
@@ -74,8 +84,6 @@ export async function processMutation(
     used: false,
     repairAttempted: false
   };
-
-  const client = getModelClient();
   const eligibleForLlm =
     env.enableAutoRepair &&
     client &&
@@ -129,6 +137,7 @@ export async function processMutation(
         prompt: enriched.treatment_prompt || result.treatment.prompt,
         suggestedPatch: enriched.suggested_patch || undefined
       },
+      securityAgent,
       timeline
     };
   } catch (error) {
@@ -141,5 +150,12 @@ export async function processMutation(
     };
   }
 
-  return withMetadata(result, mutation, llm);
+  return withMetadata(
+    {
+      ...result,
+      securityAgent
+    },
+    mutation,
+    llm
+  );
 }

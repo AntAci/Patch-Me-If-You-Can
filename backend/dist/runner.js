@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 const SCENARIO_FILES = {
     healthy: "healthy.json",
     "infected-healed": "infected-healed.json",
+    "infected-escalated": "infected-escalated.json",
     "protected-zone-blocked": "protected-zone-blocked.json"
 };
 export async function runScenario(name, options = {}) {

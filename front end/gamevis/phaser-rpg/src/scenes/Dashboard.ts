@@ -2,7 +2,12 @@ import { Scene } from 'phaser';
 
 import { key } from '../constants';
 import { ZONE_COLORS } from '../constants/zones';
-import type { ScenarioRunResult, TimelineEvent } from '../data/types';
+import { getLiveSocketUrl } from '../data/api';
+import type {
+  PolicyInstruction,
+  ScenarioRunResult,
+  TimelineEvent,
+} from '../data/types';
 
 type MutationKind =
   | 'clean_patch'
@@ -81,6 +86,15 @@ export class Dashboard extends Scene {
   private checkTests = 'n/a';
   private checkLint = 'n/a';
   private checkTypecheck = 'n/a';
+  private currentPolicyInstructions: PolicyInstruction[] = [];
+  private currentTreatmentPrompt = 'Waiting for treatment guidance.';
+  private currentWhatNotToTouch = 'No protected paths specified.';
+  private currentRepairAttempt = 0;
+  private currentSecurityAgent = 'Mainline Sentinel';
+  private operatorNoTouchInput: HTMLTextAreaElement | null = null;
+  private operatorNotesInput: HTMLTextAreaElement | null = null;
+  private operatorLockSqlInput: HTMLInputElement | null = null;
+  private operatorKeepDiffSmallInput: HTMLInputElement | null = null;
 
   private processedHookKeys = new Set<string>();
   private spawnedTotal = 0;
@@ -118,6 +132,7 @@ export class Dashboard extends Scene {
     this.createPlayer();
     this.createCore();
     this.createUI();
+    this.bindOperatorControls();
     this.createAnimations();
     this.startAutoplay();
     this.connectLiveHooks();
@@ -307,8 +322,16 @@ export class Dashboard extends Scene {
   }
 
   private connectLiveHooks() {
-    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${location.host}/ws`);
+    const socketUrl = getLiveSocketUrl();
+    if (!socketUrl) {
+      this.liveConnected = false;
+      this.streamStatusText.setText('Hook Stream: offline');
+      this.streamStatusText.setColor('#ff8899');
+      this.syncExternalStats();
+      return;
+    }
+
+    const ws = new WebSocket(socketUrl);
     this.liveSocket = ws;
 
     ws.addEventListener('message', (evt) => {
@@ -368,6 +391,27 @@ export class Dashboard extends Scene {
       `Last event: ${this.lastTimelineEvent}\nZone: ${this.lastZone}\nStatus: ${this.lastMutationStatus}`,
     );
     this.syncExternalStats();
+  }
+
+  private bindOperatorControls() {
+    this.operatorNoTouchInput = document.getElementById(
+      'ext-no-touch-files',
+    ) as HTMLTextAreaElement | null;
+    this.operatorNotesInput = document.getElementById(
+      'ext-operator-notes',
+    ) as HTMLTextAreaElement | null;
+    this.operatorLockSqlInput = document.getElementById(
+      'ext-lock-sql',
+    ) as HTMLInputElement | null;
+    this.operatorKeepDiffSmallInput = document.getElementById(
+      'ext-keep-diff-small',
+    ) as HTMLInputElement | null;
+
+    const sync = () => this.syncExternalStats();
+    this.operatorNoTouchInput?.addEventListener('input', sync);
+    this.operatorNotesInput?.addEventListener('input', sync);
+    this.operatorLockSqlInput?.addEventListener('change', sync);
+    this.operatorKeepDiffSmallInput?.addEventListener('change', sync);
   }
 
   private updatePlayerIntent() {
@@ -913,6 +957,12 @@ export class Dashboard extends Scene {
     if (
       name === 'retry_started' ||
       name === 'retry_patch_applied' ||
+      name === 'repair_loop_started' ||
+      name === 'repair_attempt_started' ||
+      name === 'repair_patch_generated' ||
+      name === 'repair_patch_applied' ||
+      name === 'repair_attempt_failed' ||
+      name === 'repair_attempt_succeeded' ||
       name === 'recheck_started'
     ) {
       return 'repair_loop';
@@ -930,6 +980,7 @@ export class Dashboard extends Scene {
     this.lastMutationId = String(event.data?.mutationId ?? this.lastMutationId);
     if (event.data?.filesChanged)
       this.lastFiles = String(event.data.filesChanged);
+    if (event.attempt) this.currentRepairAttempt = event.attempt;
 
     let active =
       this.findMutationById(String(event.data?.mutationId ?? '')) ??
@@ -979,10 +1030,19 @@ export class Dashboard extends Scene {
       this.checkLint = String(event.data?.status ?? this.checkLint);
     } else if (event.name === 'typecheck_completed') {
       this.checkTypecheck = String(event.data?.status ?? this.checkTypecheck);
+    } else if (event.name === 'treatment_generated') {
+      const strategy = String(event.data?.strategy ?? 'none');
+      this.currentTreatmentPrompt =
+        strategy === 'retry_patch'
+          ? 'Attempt a minimal repair that restores failing checks without touching protected files.'
+          : 'No automated repair should touch protected files; escalate if the change crosses policy boundaries.';
     } else if (
-      event.name === 'treatment_generated' ||
       event.name === 'retry_started' ||
       event.name === 'retry_patch_applied' ||
+      event.name === 'repair_loop_started' ||
+      event.name === 'repair_attempt_started' ||
+      event.name === 'repair_patch_generated' ||
+      event.name === 'repair_patch_applied' ||
       event.name === 'recheck_started'
     ) {
       active.state = 'repairing';
@@ -990,6 +1050,13 @@ export class Dashboard extends Scene {
       active.sprite.setTint(this.tintForUnit(active.kind, active.state));
       active.label.setText(this.labelFor(active.kind, active.state));
       this.pushFeed('Repair loop active');
+      if (event.name === 'repair_attempt_started') {
+        this.pushFeed(`Repair attempt ${event.attempt} started`);
+      }
+    } else if (event.name === 'repair_attempt_failed') {
+      this.pushFeed(`Repair attempt ${event.attempt} failed`);
+    } else if (event.name === 'repair_attempt_succeeded') {
+      this.pushFeed(`Repair attempt ${event.attempt} succeeded`);
     } else if (event.name === 'patch_quarantined') {
       active.state = 'quarantined';
       active.hp = 0;
@@ -1042,6 +1109,18 @@ export class Dashboard extends Scene {
     this.checkTests = result.checks.tests.status;
     this.checkLint = result.checks.lint.status;
     this.checkTypecheck = result.checks.typecheck.status;
+    this.currentPolicyInstructions =
+      result.policyInstructions ?? this.defaultPolicyInstructions();
+    this.currentTreatmentPrompt = result.treatment.prompt;
+    this.currentWhatNotToTouch =
+      result.treatment.whatNotToTouch ??
+      this.currentPolicyInstructions.map((policy) => policy.instruction).join(
+        ' ',
+      );
+    this.currentRepairAttempt = 0;
+    this.currentSecurityAgent =
+      result.securityAgent?.name ?? 'Mainline Sentinel';
+    this.seedOperatorControls(result);
 
     this.spawnTargetedMutation(
       this.kindFromDiagnosis(result.diagnosis.code),
@@ -1066,7 +1145,134 @@ export class Dashboard extends Scene {
   }
 
   resetVisuals() {
-    this.playScenario({} as ScenarioRunResult);
+    this.currentPolicyInstructions = this.defaultPolicyInstructions();
+    this.currentTreatmentPrompt = 'Waiting for treatment guidance.';
+    this.currentWhatNotToTouch = 'No protected paths specified.';
+    this.currentRepairAttempt = 0;
+    this.currentSecurityAgent = 'Mainline Sentinel';
+    this.syncExternalStats();
+  }
+
+  private defaultPolicyInstructions(): PolicyInstruction[] {
+    return [
+      {
+        id: 'protected-files',
+        title: 'Protected Files',
+        instruction:
+          'Do not touch auth, security, or secrets files without human approval.',
+        severity: 'critical',
+      },
+      {
+        id: 'main-sql',
+        title: 'Main SQL Database',
+        instruction:
+          'Do not alter the main SQL database schema, migrations, or production seed data.',
+        severity: 'critical',
+      },
+      {
+        id: 'minimal-diff',
+        title: 'Minimal Diff',
+        instruction:
+          'Keep repairs minimal, reversible, and limited to the failing behavior.',
+        severity: 'warn',
+      },
+    ];
+  }
+
+  private seedOperatorControls(result: ScenarioRunResult) {
+    if (this.operatorNoTouchInput) {
+      const fromPolicy = (result.policyInstructions ?? [])
+        .filter((policy) => policy.severity === 'critical')
+        .map((policy) => policy.instruction);
+      if (fromPolicy.length > 0) {
+        this.operatorNoTouchInput.value = fromPolicy.join('\n');
+      }
+    }
+    if (this.operatorLockSqlInput) {
+      this.operatorLockSqlInput.checked = Boolean(
+        (result.policyInstructions ?? []).some((policy) =>
+          policy.instruction.toLowerCase().includes('sql database'),
+        ),
+      );
+    }
+    if (this.operatorKeepDiffSmallInput) {
+      this.operatorKeepDiffSmallInput.checked = Boolean(
+        (result.policyInstructions ?? []).some((policy) =>
+          policy.instruction.toLowerCase().includes('minimal'),
+        ),
+      );
+    }
+  }
+
+  private readOperatorPolicyInstructions() {
+    const policies = [...this.currentPolicyInstructions];
+    const noTouch = this.operatorNoTouchInput?.value
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const extraNotes = this.operatorNotesInput?.value.trim();
+    const lockSql = this.operatorLockSqlInput?.checked ?? false;
+    const keepDiffSmall = this.operatorKeepDiffSmallInput?.checked ?? false;
+
+    if (noTouch && noTouch.length > 0) {
+      policies.unshift({
+        id: 'operator-no-touch',
+        title: 'Do Not Touch',
+        instruction: `Do not touch: ${noTouch.join(', ')}`,
+        severity: 'critical',
+      });
+    }
+    if (lockSql) {
+      policies.push({
+        id: 'operator-sql-lock',
+        title: 'SQL Lock',
+        instruction:
+          'Do not change the main SQL database, migration chain, or production data.',
+        severity: 'critical',
+      });
+    }
+    if (keepDiffSmall) {
+      policies.push({
+        id: 'operator-minimal-diff',
+        title: 'Minimal Repair',
+        instruction:
+          'Keep the repair small, reversible, and focused on the exact failure.',
+        severity: 'warn',
+      });
+    }
+    if (extraNotes) {
+      policies.push({
+        id: 'operator-notes',
+        title: 'Operator Note',
+        instruction: extraNotes,
+        severity: 'warn',
+      });
+    }
+
+    return policies;
+  }
+
+  private buildAgentPrompt() {
+    const instructions = this.readOperatorPolicyInstructions();
+    const header = [
+      `Agent: ${this.currentSecurityAgent}`,
+      `Stage: ${this.lastStage}`,
+      `Zone: ${this.lastZone}`,
+      `Task: ${this.lastTask}`,
+      `Files: ${this.lastFiles}`,
+      `Repair Attempt: ${this.currentRepairAttempt || 0}`,
+      '',
+      'What Not To Touch:',
+      ...instructions.map((policy) => `- ${policy.instruction}`),
+      '',
+      'Treatment Objective:',
+      this.currentTreatmentPrompt,
+    ];
+
+    return {
+      instructions,
+      prompt: header.join('\n'),
+    };
   }
 
   private findMutationById(mutationId: string) {
@@ -1174,6 +1380,27 @@ export class Dashboard extends Scene {
     if (typecheck) typecheck.textContent = this.checkTypecheck;
     const ops = document.getElementById('ext-ops-status');
     if (ops) ops.textContent = this.liveConnected ? 'LIVE' : 'OFFLINE';
+    const guardSummary = document.getElementById('ext-guard-summary');
+    const policyList = document.getElementById('ext-policy-list');
+    const agentPrompt = document.getElementById('ext-agent-prompt');
+    const { instructions, prompt } = this.buildAgentPrompt();
+    if (guardSummary) {
+      guardSummary.textContent =
+        instructions.length > 0
+          ? `${instructions.length} guardrails active. ${this.currentWhatNotToTouch}`
+          : 'No guardrails configured.';
+    }
+    if (policyList) {
+      policyList.innerHTML = instructions
+        .map(
+          (instruction) =>
+            `<div class="policy-item policy-${instruction.severity}"><span>${instruction.title}</span><strong>${instruction.instruction}</strong></div>`,
+        )
+        .join('');
+    }
+    if (agentPrompt) {
+      agentPrompt.textContent = prompt;
+    }
     const backendFeed = document.getElementById('ext-backend-feed');
     if (backendFeed) {
       backendFeed.innerHTML = this.backendFeed

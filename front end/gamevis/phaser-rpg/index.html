@@ -68,10 +68,135 @@
         </div>
       </main>
       <aside class="side-panel right-panel">
-        <h3>Mutation Controls</h3>
-        <div id="sidebar-controls" class="control-stack"></div>
-        <div class="panel-note">
-          Use controls to inject hook-like mutations into the battle room.
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Backend Runtime</p>
+            <h3>Pipeline Inspection</h3>
+          </div>
+          <div class="status-chip" id="ext-ops-status">STREAM</div>
+        </div>
+        <div class="tech-card">
+          <div class="tech-row">
+            <span>Hook</span><strong id="ext-hook-event">none</strong>
+          </div>
+          <div class="tech-row">
+            <span>Mutation</span><strong id="ext-mutation-id">none</strong>
+          </div>
+          <div class="tech-row">
+            <span>Stage</span><strong id="ext-stage">idle</strong>
+          </div>
+          <div class="tech-row">
+            <span>Diagnosis</span><strong id="ext-diagnosis">none</strong>
+          </div>
+          <div class="tech-row">
+            <span>Verdict</span><strong id="ext-verdict">pending</strong>
+          </div>
+        </div>
+        <div class="tech-card">
+          <p class="card-title">Patch Context</p>
+          <div class="mono-block" id="ext-files">No file payload yet.</div>
+          <div class="mono-block" id="ext-task">No active task.</div>
+        </div>
+        <div class="tech-card">
+          <p class="card-title">Checks</p>
+          <div class="check-grid">
+            <div class="check-pill">
+              <span>Tests</span><strong id="ext-check-tests">n/a</strong>
+            </div>
+            <div class="check-pill">
+              <span>Lint</span><strong id="ext-check-lint">n/a</strong>
+            </div>
+            <div class="check-pill">
+              <span>Typecheck</span
+              ><strong id="ext-check-typecheck">n/a</strong>
+            </div>
+          </div>
+        </div>
+        <div class="tech-card">
+          <div class="panel-header">
+            <div>
+              <p class="card-title">Operator Guardrails</p>
+              <p class="panel-note">
+                Control what the security agent is allowed to touch during
+                repair.
+              </p>
+            </div>
+            <div class="status-chip status-chip-warm">POLICY</div>
+          </div>
+          <label class="control-label" for="ext-no-touch-files"
+            >Protected Files / Paths</label
+          >
+          <textarea
+            id="ext-no-touch-files"
+            class="policy-input"
+            name="no_touch_files"
+            rows="3"
+            autocomplete="off"
+            spellcheck="false"
+          >
+src/auth/
+src/security/
+config/secrets.ts</textarea
+          >
+          <label class="toggle-row" for="ext-lock-sql">
+            <input id="ext-lock-sql" type="checkbox" checked />
+            <span
+              >Block changes to the main SQL database and migration
+              history</span
+            >
+          </label>
+          <label class="toggle-row" for="ext-keep-diff-small">
+            <input id="ext-keep-diff-small" type="checkbox" checked />
+            <span>Require minimal, reversible repairs only</span>
+          </label>
+          <label class="control-label" for="ext-operator-notes"
+            >Extra Natural Language Instruction</label
+          >
+          <textarea
+            id="ext-operator-notes"
+            class="policy-input"
+            name="operator_notes"
+            rows="4"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Example: Do not touch payments settlement or production seed data."
+          ></textarea>
+          <div class="guard-summary" id="ext-guard-summary">
+            Guardrails active.
+          </div>
+        </div>
+        <div class="tech-card">
+          <p class="card-title">Agent Prompt</p>
+          <div id="ext-policy-list" class="policy-list">
+            No policy instructions loaded.
+          </div>
+          <div id="ext-agent-prompt" class="prompt-block">
+            Waiting for scenario data...
+          </div>
+        </div>
+        <div class="tech-card demo-run-card">
+          <div class="panel-header">
+            <div>
+              <p class="card-title">Guided Demo</p>
+              <p class="panel-note">
+                Run a short scripted walkthrough of release, repair, and block
+                behavior.
+              </p>
+            </div>
+            <div class="status-chip status-chip-warm">DEMO</div>
+          </div>
+          <button id="ext-demo-run" class="demo-run-button" type="button">
+            Demo Run
+          </button>
+          <div id="ext-demo-run-status" class="guard-summary">
+            Ready to show the full flow.
+          </div>
+        </div>
+        <div class="tech-card grow">
+          <p class="card-title">Wire Trace</p>
+          <div id="ext-backend-feed" class="trace-feed">
+            Waiting for backend events...
+          </div>
         </div>
       </aside>
     </div>

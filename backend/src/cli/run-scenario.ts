@@ -26,7 +26,7 @@ export async function runScenarioCli(argv: string[]): Promise<void> {
 
   if (!scenarioName) {
     console.error(
-      "Usage: node dist/cli/run-scenario.js <healthy|infected-healed|protected-zone-blocked> [--contract] [--live <path>]"
+      "Usage: node dist/cli/run-scenario.js <healthy|infected-healed|infected-escalated|protected-zone-blocked> [--contract] [--live <path>]"
     );
     process.exit(1);
   }
@@ -34,6 +34,7 @@ export async function runScenarioCli(argv: string[]): Promise<void> {
   const knownScenarios = new Set<ScenarioName>([
     "healthy",
     "infected-healed",
+    "infected-escalated",
     "protected-zone-blocked"
   ]);
 

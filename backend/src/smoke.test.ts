@@ -24,6 +24,15 @@ test("infected-healed repairs after retry", async () => {
   assert.equal(r.finalVerdict, "released");
   assert.equal(r.retry.attempted, true);
   assert.equal(r.retry.succeeded, true);
+  assert.equal(r.repairAttempts.length, 1);
+});
+
+test("infected-escalated stays quarantined after three repair attempts", async () => {
+  const r = await runScenario("infected-escalated");
+  assert.equal(r.finalVerdict, "quarantined");
+  assert.equal(r.retry.attempted, true);
+  assert.equal(r.retry.succeeded, false);
+  assert.equal(r.repairAttempts.length, 3);
 });
 
 test("diagnosis merges verificationFailures when tests fail (live data not dropped)", () => {
@@ -127,4 +136,10 @@ test("protected auth mutation is blocked from cursor mutation processing", async
 
   const result = await processMutation(mutation);
   assert.equal(result.finalVerdict, "blocked");
+});
+
+test("scenario results expose policy instructions and security agent metadata", async () => {
+  const r = await runScenario("healthy");
+  assert.ok(r.policyInstructions.length >= 4);
+  assert.equal(r.securityAgent.maxRepairAttempts, 3);
 });

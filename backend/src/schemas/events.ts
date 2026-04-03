@@ -25,15 +25,19 @@ export type TimelineEventName =
   | "patch_quarantined"
   | "diagnosis_generated"
   | "treatment_generated"
-  | "retry_started"
-  | "retry_patch_applied"
+  | "repair_loop_started"
+  | "repair_attempt_started"
+  | "repair_patch_generated"
+  | "repair_patch_applied"
   | "recheck_started"
+  | "repair_attempt_failed"
+  | "repair_attempt_succeeded"
   | "final_verdict_issued";
 
 export interface TimelineEvent {
   name: TimelineEventName;
   at: string;
-  attempt: 0 | 1;
+  attempt: number;
   data?: Record<string, string | number | boolean | null>;
 }
 
@@ -72,6 +76,34 @@ export interface Treatment {
   suggestedPatch?: string;
 }
 
+export interface PolicyInstruction {
+  id: string;
+  title: string;
+  instruction: string;
+  severity: "info" | "warn" | "critical";
+}
+
+export interface SecurityAgentInfo {
+  name: string;
+  mode: "deterministic" | "llm";
+  maxRepairAttempts: number;
+}
+
+export interface RepairAttempt {
+  attempt: number;
+  status: "completed" | "failed";
+  verdict: Verdict | "retrying";
+  summary: string;
+  treatmentPrompt: string;
+  suggestedPatch?: string;
+  checks: {
+    tests: CheckResult;
+    lint: CheckResult;
+    typecheck: CheckResult;
+  };
+  at: string;
+}
+
 /** Shared frontend contract (Person 1 ↔ Person 2). */
 export interface MainlineImmunityContract {
   patchId: string;
@@ -83,6 +115,9 @@ export interface MainlineImmunityContract {
   treatment: string;
   timeline: string[];
   finalVerdict: Verdict;
+  repairAttempts: RepairAttempt[];
+  policyInstructions: PolicyInstruction[];
+  securityAgent: SecurityAgentInfo;
 }
 
 export type ScenarioSource = "scenario" | "cursor_hook";
@@ -125,6 +160,9 @@ export interface ScenarioRunResult {
     attempted: boolean;
     succeeded: boolean;
   };
+  repairAttempts: RepairAttempt[];
+  policyInstructions: PolicyInstruction[];
+  securityAgent: SecurityAgentInfo;
   hookEvents?: string[];
   filesChanged?: string[];
   timeline: TimelineEvent[];

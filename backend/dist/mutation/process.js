@@ -41,14 +41,23 @@ function withMetadata(result, mutation, llm) {
 export async function processMutation(mutation) {
     const env = loadMainlineEnv();
     const scenario = buildScenarioFromMutation(mutation);
-    let result = await runScenarioDefinition(scenario, env.liveWorkspace ? { liveWorkspacePath: env.liveWorkspace } : {});
+    const client = getModelClient();
+    const securityAgent = {
+        name: env.securityAgentName,
+        mode: client ? "llm" : "deterministic",
+        maxRepairAttempts: env.maxRepairAttempts
+    };
+    let result = await runScenarioDefinition(scenario, {
+        ...(env.liveWorkspace ? { liveWorkspacePath: env.liveWorkspace } : {}),
+        policyInstructionsRaw: env.policyInstructionsRaw,
+        securityAgent
+    });
     let llm = {
         provider: env.llmProvider,
         model: env.openAiModel,
         used: false,
         repairAttempted: false
     };
-    const client = getModelClient();
     const eligibleForLlm = env.enableAutoRepair &&
         client &&
         result.finalVerdict !== "blocked" &&
@@ -94,6 +103,7 @@ export async function processMutation(mutation) {
                 prompt: enriched.treatment_prompt || result.treatment.prompt,
                 suggestedPatch: enriched.suggested_patch || undefined
             },
+            securityAgent,
             timeline
         };
     }
@@ -106,5 +116,8 @@ export async function processMutation(mutation) {
             lastError: String(error)
         };
     }
-    return withMetadata(result, mutation, llm);
+    return withMetadata({
+        ...result,
+        securityAgent
+    }, mutation, llm);
 }

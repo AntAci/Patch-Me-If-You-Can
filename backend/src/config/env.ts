@@ -15,6 +15,9 @@ export interface MainlineEnv {
   port: number;
   enableLiveMutations: boolean;
   enableAutoRepair: boolean;
+  maxRepairAttempts: number;
+  securityAgentName: string;
+  policyInstructionsRaw?: string;
 }
 
 let loaded = false;
@@ -23,6 +26,12 @@ let cachedEnv: MainlineEnv | undefined;
 function parseBoolean(value: string | undefined, defaultValue: boolean): boolean {
   if (!value) return defaultValue;
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+function parseNumber(value: string | undefined, defaultValue: number): number {
+  if (!value) return defaultValue;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
 }
 
 function parseDotEnv(content: string): Record<string, string> {
@@ -83,7 +92,14 @@ export function loadMainlineEnv(): MainlineEnv {
     enableAutoRepair: parseBoolean(
       process.env.MAINLINE_ENABLE_AUTO_REPAIR,
       true
-    )
+    ),
+    maxRepairAttempts: Math.min(
+      3,
+      parseNumber(process.env.MAINLINE_MAX_REPAIR_ATTEMPTS, 3)
+    ),
+    securityAgentName:
+      process.env.MAINLINE_SECURITY_AGENT_NAME || "Mainline Sentinel",
+    policyInstructionsRaw: process.env.MAINLINE_POLICY_INSTRUCTIONS
   };
 
   return cachedEnv;

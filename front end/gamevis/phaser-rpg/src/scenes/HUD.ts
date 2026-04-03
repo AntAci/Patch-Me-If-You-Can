@@ -22,7 +22,13 @@ const EVENT_LABELS: Record<string, string> = {
   treatment_generated: 'Countermeasure queued',
   retry_started: 'Recovery cycle',
   retry_patch_applied: 'Patch volley',
+  repair_loop_started: 'Repair loop primed',
+  repair_attempt_started: 'Repair attempt',
+  repair_patch_generated: 'Repair patch drafted',
+  repair_patch_applied: 'Repair patch applied',
   recheck_started: 'Second sweep',
+  repair_attempt_failed: 'Repair attempt failed',
+  repair_attempt_succeeded: 'Repair attempt succeeded',
   final_verdict_issued: 'Encounter resolved',
 };
 
@@ -33,6 +39,12 @@ const EVENT_COLORS: Record<string, string> = {
   diagnosis_generated: '#ffcc00',
   treatment_generated: '#4488ff',
   retry_started: '#4488ff',
+  repair_loop_started: '#4488ff',
+  repair_attempt_started: '#6ab8ff',
+  repair_patch_generated: '#6ab8ff',
+  repair_patch_applied: '#6ab8ff',
+  repair_attempt_failed: '#ff8800',
+  repair_attempt_succeeded: '#00ff88',
   final_verdict_issued: '#00ff88',
   test_check_completed: '#5a7a9a',
   lint_check_completed: '#5a7a9a',
@@ -54,6 +66,10 @@ export class HUD extends Scene {
   private liveThreatCode = 'unknown';
   private liveSymptoms: string[] = [];
   private liveTreatment = '';
+  private demoRunButton: HTMLButtonElement | null = null;
+  private demoRunStatus: HTMLDivElement | null = null;
+  private demoRunTimers: number[] = [];
+  private demoRunActive = false;
 
   constructor() {
     super(key.scene.hud);
@@ -142,6 +158,12 @@ export class HUD extends Scene {
     const modeToggle = this.overlay.querySelector(
       '#mode-toggle',
     ) as HTMLButtonElement;
+    this.demoRunButton = document.getElementById(
+      'ext-demo-run',
+    ) as HTMLButtonElement | null;
+    this.demoRunStatus = document.getElementById(
+      'ext-demo-run-status',
+    ) as HTMLDivElement | null;
 
     this.buttons = [btnHealthy, btnInfected, btnBlocked, btnReplay];
 
@@ -158,6 +180,7 @@ export class HUD extends Scene {
       }
     });
     modeToggle.addEventListener('click', () => this.toggleMode());
+    this.demoRunButton?.addEventListener('click', () => this.startDemoRun());
   }
 
   private wireEvents() {
@@ -182,10 +205,14 @@ export class HUD extends Scene {
         replay.disabled =
           s.isPlaying || !s.currentScenario || s.mode === 'live';
       this.mutationCount.textContent = String(s.mutationCount);
+      if (this.demoRunButton) {
+        this.demoRunButton.disabled = s.mode === 'live' || this.demoRunActive;
+      }
     });
   }
 
   private async runDemo(name: string) {
+    this.stopDemoRun(false);
     this.setButtonsDisabled(true);
     const result = await runScenario(name);
     this.runDemoWithResult(result);
@@ -210,14 +237,19 @@ export class HUD extends Scene {
       this.modeLabel.textContent = 'DEMO';
       this.agentDot.className = 'mode-dot mode-dot-grey';
       this.buttons.forEach((b) => (b.disabled = false));
+      if (this.demoRunButton) this.demoRunButton.disabled = false;
+      this.setDemoRunStatus('Ready to show the full flow.');
     } else {
       // Switch to live
+      this.stopDemoRun(false);
       updateState({ mode: 'live' });
       this.modeLabel.textContent = 'LIVE';
       this.agentDot.className = 'mode-dot mode-dot-connecting';
       this.buttons.forEach((b) => {
         if (b.id !== 'btn-replay') b.disabled = true;
       });
+      if (this.demoRunButton) this.demoRunButton.disabled = true;
+      this.setDemoRunStatus('Demo Run disabled while live stream mode is active.');
 
       this.liveWs = connectLive(
         (event) => {
@@ -242,6 +274,90 @@ export class HUD extends Scene {
 
   private setButtonsDisabled(disabled: boolean) {
     this.buttons.forEach((b) => (b.disabled = disabled));
+  }
+
+  private async startDemoRun() {
+    if (this.demoRunActive || state.mode === 'live') return;
+
+    this.stopDemoRun(false);
+    this.demoRunActive = true;
+    if (this.demoRunButton) this.demoRunButton.disabled = true;
+    this.setButtonsDisabled(true);
+    this.setDemoRunStatus('Loading guided walkthrough...');
+
+    const sequence = [
+      {
+        name: 'healthy',
+        label: '1/3 Clean release',
+      },
+      {
+        name: 'infected-healed',
+        label: '2/3 Quarantine + repair',
+      },
+      {
+        name: 'protected-zone-blocked',
+        label: '3/3 Protected-file block',
+      },
+    ];
+
+    try {
+      const results = await Promise.all(sequence.map((item) => runScenario(item.name)));
+      results.forEach((result, index) => {
+        const timeout = window.setTimeout(() => {
+          const label = sequence[index]?.label ?? 'Demo';
+          this.setDemoRunStatus(`${label} running...`);
+          this.runDemoWithResult(result);
+
+          if (index === results.length - 1) {
+            const finishTimeout = window.setTimeout(() => {
+              this.stopDemoRun(true);
+            }, this.estimateScenarioDuration(result));
+            this.demoRunTimers.push(finishTimeout);
+          }
+        }, index === 0 ? 0 : this.offsetForResults(results, index));
+        this.demoRunTimers.push(timeout);
+      });
+    } catch {
+      this.stopDemoRun(false);
+      this.setDemoRunStatus('Demo Run failed to load scenario data.');
+    }
+  }
+
+  private offsetForResults(results: ScenarioRunResult[], endIndex: number) {
+    let total = 0;
+    for (let idx = 0; idx < endIndex; idx += 1) {
+      total += this.estimateScenarioDuration(results[idx]);
+    }
+    return total;
+  }
+
+  private estimateScenarioDuration(result: ScenarioRunResult) {
+    const timelineLength = result.timeline?.length ?? 0;
+    return Math.max(3200, timelineLength * 520 + 1200);
+  }
+
+  private stopDemoRun(completed: boolean) {
+    this.demoRunTimers.forEach((timer) => window.clearTimeout(timer));
+    this.demoRunTimers = [];
+    const wasActive = this.demoRunActive;
+    this.demoRunActive = false;
+    if (this.demoRunButton) {
+      this.demoRunButton.disabled = state.mode === 'live';
+    }
+    if (state.mode !== 'live') {
+      this.setButtonsDisabled(false);
+    }
+    if (completed) {
+      this.setDemoRunStatus('Demo Run complete. You can replay or launch a single scenario.');
+    } else if (wasActive && state.mode !== 'live') {
+      this.setDemoRunStatus('Ready to show the full flow.');
+    }
+  }
+
+  private setDemoRunStatus(message: string) {
+    if (this.demoRunStatus) {
+      this.demoRunStatus.textContent = message;
+    }
   }
 
   private appendTimelineEvent(event: TimelineEvent) {
@@ -372,5 +488,13 @@ export class HUD extends Scene {
     const content = this.diagnosisPanel.querySelector('.diagnosis-content')!;
     content.innerHTML =
       '<span class="diagnosis-placeholder">Awaiting analysis...</span>';
+  }
+
+  shutdown() {
+    this.stopDemoRun(false);
+    if (this.liveWs) {
+      this.liveWs.close();
+      this.liveWs = null;
+    }
   }
 }

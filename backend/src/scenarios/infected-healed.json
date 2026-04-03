@@ -13,10 +13,17 @@
     "lint": { "status": "passed", "summary": "No lint errors" },
     "typecheck": { "status": "passed", "summary": "TypeScript clean" }
   },
-  "retryChecks": {
-    "tests": { "status": "passed", "summary": "42/42 tests passed after repair" },
-    "lint": { "status": "passed", "summary": "No lint errors" },
-    "typecheck": { "status": "passed", "summary": "TypeScript clean" }
-  },
+  "repairAttempts": [
+    {
+      "summary": "Security agent removed the null-unsafe retry branch and restored billing guardrails.",
+      "agentNotes": "Keep the patch scoped to the billing retry path. Do not touch auth/session or protected files.",
+      "suggestedPatch": "--- a/src/features/billing.ts\n+++ b/src/features/billing.ts\n@@ repair retry guard @@\n- unsafeRetry(customer)\n+ safeRetry(customer)",
+      "checks": {
+        "tests": { "status": "passed", "summary": "42/42 tests passed after repair" },
+        "lint": { "status": "passed", "summary": "No lint errors" },
+        "typecheck": { "status": "passed", "summary": "TypeScript clean" }
+      }
+    }
+  ],
   "diagnosisHints": ["regression", "unsafe retry logic"]
 }

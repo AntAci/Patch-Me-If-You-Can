@@ -13,6 +13,7 @@ The current version was assembled in less than 3 hours, so the focus is on demon
 ## Assets
 
 https://github.com/user-attachments/assets/3059b8b1-9c3e-4c2b-be0a-0aaaa75abc15
+
 Whilst Cursur is Generating code in the background.
 
 ## What The Project Does

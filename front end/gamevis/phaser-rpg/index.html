@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0e17" />
+    <meta
+      name="description"
+      content="Mainline Immunity - AI Patch Verification System"
+    />
+    <link rel="apple-touch-icon" href="logo192.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="stylesheet" href="src/style.css" />
+    <title>Mainline Immunity</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="app-shell">
+      <aside class="side-panel left-panel">
+        <h3>Runtime Telemetry</h3>
+        <div class="stat-item">
+          <span>Agent Integrity</span><strong id="ext-core">100%</strong>
+        </div>
+        <div class="stat-item">
+          <span>Active Mutations</span><strong id="ext-mutations">0</strong>
+        </div>
+        <div class="stat-item">
+          <span>Spawned Total</span><strong id="ext-spawned">0</strong>
+        </div>
+        <div class="stat-item">
+          <span>Killed Total</span><strong id="ext-killed">0</strong>
+        </div>
+        <div class="stat-item">
+          <span>Fix Loop (Released)</span><strong id="ext-fixed">0</strong>
+        </div>
+        <div class="stat-item">
+          <span>Quarantined</span><strong id="ext-quarantined">0</strong>
+        </div>
+        <div class="stat-item">
+          <span>Blocked</span><strong id="ext-blocked">0</strong>
+        </div>
+        <div class="stat-item">
+          <span>Agent Hit Count</span><strong id="ext-hits">0</strong>
+        </div>
+        <div class="stat-item">
+          <span>Patrol Loops</span><strong id="ext-loops">0</strong>
+        </div>
+        <div class="stat-item">
+          <span>Last Timeline Event</span><strong id="ext-event">none</strong>
+        </div>
+        <div class="stat-item">
+          <span>Last Zone</span><strong id="ext-zone">n/a</strong>
+        </div>
+        <div class="stat-item">
+          <span>Stream Status</span><strong id="ext-stream">connecting</strong>
+        </div>
+        <h3>Process Feed</h3>
+        <div id="ext-feed" class="feed-box">Awaiting mutation events...</div>
+        <p class="panel-note">
+          Main character = you (defender). Enemies = mutation events from demo
+          or live hooks.
+        </p>
+      </aside>
+      <main class="game-stage">
+        <div class="game-frame">
+          <div id="game-container"></div>
+        </div>
+      </main>
+      <aside class="side-panel right-panel">
+        <h3>Mutation Controls</h3>
+        <div id="sidebar-controls" class="control-stack"></div>
+        <div class="panel-note">
+          Use controls to inject hook-like mutations into the battle room.
+        </div>
+      </aside>
+    </div>
+    <div id="hud-overlay"></div>
+    <script type="module" src="src/index.ts"></script>
+  </body>
+</html>

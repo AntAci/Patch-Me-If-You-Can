@@ -12,10 +12,6 @@ The current version was assembled in less than 3 hours, so the focus is on demon
 
 ## Assets
 
-`[Add GIF here]`
-
-`[Add Cursor coding screenshot here]`
-
 ## What The Project Does
 
 The backend models a patch review pipeline:

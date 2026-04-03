@@ -16,6 +16,16 @@
         "command": "node scripts/cursor-hook-bridge.mjs afterFileEdit"
       }
     ],
+    "beforeReadFile": [
+      {
+        "command": "node scripts/cursor-hook-bridge.mjs beforeReadFile"
+      }
+    ],
+    "beforeTabFileRead": [
+      {
+        "command": "node scripts/cursor-hook-bridge.mjs beforeTabFileRead"
+      }
+    ],
     "stop": [
       {
         "command": "node scripts/cursor-hook-bridge.mjs stop"
